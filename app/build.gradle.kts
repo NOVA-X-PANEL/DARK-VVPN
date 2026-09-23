@@ -3,6 +3,7 @@
 // name instead of qualified.
 import java.net.URI
 import java.security.MessageDigest
+import org.gradle.api.tasks.testing.Test
 
 plugins {
     alias(libs.plugins.android.application)
@@ -78,6 +79,23 @@ fun sha256(file: File): String {
         }
     }
     return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+}
+
+/*
+ * Heap for the forked test JVM.
+ *
+ * Not a nitpick: the default 512 MB is not enough to run Robolectric's sandbox
+ * (a framework load per emulated SDK level) with Compose composed inside it. The
+ * worker ran out of heap, and the OutOfMemoryError arrived as a `Suppressed`
+ * exception behind whatever test happened to be executing, so the failure moved
+ * from test to test and looked like flakiness in the suite. It was never the
+ * product; it was the runner.
+ */
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "2g"
+    // The Compose test runtime and the Robolectric sandbox both allocate classes
+    // outside the heap.
+    jvmArgs("-XX:MaxMetaspaceSize=768m")
 }
 
 // The core must exist before anything compiles against it. `builtBy` on the
