@@ -383,7 +383,59 @@ look broken, because the list still showed unusable rows above the real ones. An
 app that starts empty and explains itself is more useful than one that starts
 full of things that cannot connect.
 
+## Why the update control looked dead
+
+Three independent faults. All are now impossible, and the reasoning is worth
+keeping because each one was invisible from the others' vantage point.
+
+**The sheet only knew about one outcome.** It received the "there is an update"
+branch, so `UpToDate` and `Failed` had nowhere to go and each triggered a
+dismissal — the dialog flashed and vanished. Tapping the banner while current, or
+with no network, therefore did nothing visible at all. The sheet now takes the
+whole `UpdateUiState` and renders every state, with a Retry on the failure. Nothing
+dismisses itself.
+
+**The status lived on one screen and was hidden the rest of the time.** It was
+recorded only on manual checks and rendered only inside the Settings row, and
+nothing was shown when there was no badge. So a silent launch check that failed
+left that row looking idle. It is now recorded by every check with an error flag,
+and the row always reads one of: `x.y.z ready`, `Check failed`, `Up to date`, or
+`Check now`.
+
+**The action did not look pressable.** "Update" was plain text inside a clickable
+row — tappable, but not readable as a button.
+
+### The part the app was hiding
+
+GitHub's unauthenticated API allows **60 requests an hour per IP**. A shared mobile
+network can exhaust that by itself and the answer is a `403`. The launch check
+treated that as "nothing to report", so no badge appeared and the row stayed
+idle — the app looked like a build without an updater.
+
+The rate limit is not something the app can fix. Concealing it was a decision, and
+the wrong one: a failure the user cannot see is indistinguishable from a feature
+that does not exist.
+
 ## Testing strategy
+
+### One dead end, recorded
+
+Compose render tests for the update banner and dialog were added and then
+removed. Under Robolectric they never reached idle — the sheet contains
+indeterminate progress indicators, and even with the animation clock held still
+(`mainClock.autoAdvance = false`) each test blocked for the framework's 60-second
+timeout, turning a ten-second suite into a fifteen-minute one with failures that
+moved between tests.
+
+The fixes attempted, in order, and what each one actually solved: a plain
+`Application` (helped, did not fix), a 2 GB test heap after reading a real
+`OutOfMemoryError` out of the report (a genuine fix for a genuine problem, but not
+this one), display qualifiers (fixed three assertions failing on a window smaller
+than any phone), and the clock control (no effect). A suite that hangs CI teaches
+a team to ignore it, so the tests are gone.
+
+The coverage is not lost: `AppStartupTest` composes the real `MainActivity`, asserts
+Compose attached and re-attached after a recreate, and runs in milliseconds.
 
 - **JVM unit tests** cover everything pure: the Xray config builder (29 tests,
   one per protocol/security/transport branch), the subscription parser (24, one
