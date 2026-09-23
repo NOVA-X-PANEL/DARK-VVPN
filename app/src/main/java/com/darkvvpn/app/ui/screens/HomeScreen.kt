@@ -30,8 +30,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.darkvvpn.app.R
 import com.darkvvpn.app.data.model.VpnState
+import com.darkvvpn.app.ui.components.ConnectionFailureCard
 import com.darkvvpn.app.ui.components.ConnectionOrb
 import com.darkvvpn.app.ui.components.CountryAvatar
 import com.darkvvpn.app.ui.components.SectionHeader
@@ -67,7 +66,9 @@ fun HomeScreen(
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val pendingIntent by viewModel.pendingPermissionIntent.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    // The failures worth reading: a fetch that names the problem, or a core that
+    // refused to start. Held until dismissed, and copyable.
+    val failure by viewModel.failure.collectAsStateWithLifecycle()
 
     // VpnService.prepare() hands back an Intent that only an Activity can launch.
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -84,23 +85,10 @@ fun HomeScreen(
         pendingIntent?.let { permissionLauncher.launch(it) }
     }
 
-    // Surface failures once, then clear them so a rotation doesn't re-show the bar.
-    val errorMessage = when (val s = state) {
-        is VpnState.Error -> s.message
-        is VpnState.Disconnected -> s.lastError
-        else -> null
-    }
-    LaunchedEffect(errorMessage) {
-        if (!errorMessage.isNullOrBlank()) {
-            snackbarHostState.showSnackbar(errorMessage)
-            viewModel.consumeError()
-        }
-    }
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        // The hosting Scaffold already reserves space for the system bars and the
-        // navigation bar, so this inner one must not reserve them a second time.
+        // No snackbar host. A failure is shown as a card that stays, because an
+        // auto-dismissing bar is unreadable for a message that explains why a
+        // tunnel did not come up.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
@@ -120,6 +108,14 @@ fun HomeScreen(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
             )
+
+            failure?.let { message ->
+                Spacer(Modifier.height(14.dp))
+                ConnectionFailureCard(
+                    message = message,
+                    onDismiss = viewModel::dismissFailure,
+                )
+            }
 
             Spacer(Modifier.height(4.dp))
 

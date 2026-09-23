@@ -136,7 +136,12 @@
     <string name="action_import">Import</string>
     <string name="action_test">Test</string>
     <string name="action_close">Close</string>
+    <string name="connection_failed">Could not connect</string>
+    <string name="connection_failed_hint">This message stays until you dismiss it. You can select and copy the text.</string>
+    <string name="servers_unsupported">Not supported</string>
+    <string name="servers_unsupported_hint">This node needs a different core</string>
     <string name="action_clear">Clear</string>
+    <string name="action_dismiss">Dismiss</string>
 
     <!-- Notification -->
     <string name="notif_channel_name">VPN status</string>

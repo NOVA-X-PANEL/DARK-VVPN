@@ -1,6 +1,7 @@
 package com.darkvvpn.app.data.repository
 
 import android.util.Log
+import com.darkvvpn.app.data.model.VpnProtocol
 import com.darkvvpn.app.data.model.VpnServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -120,7 +121,7 @@ class ServerRepository {
                 snapshot.map { server ->
                     async(Dispatchers.IO) {
                         gate.withPermit {
-                            val latencyMs = probe(server.host, server.port)
+                            val latencyMs = probe(server)
                             _servers.update { list ->
                                 list.map {
                                     if (it.id == server.id) it.copy(pingMs = latencyMs) else it
@@ -135,8 +136,14 @@ class ServerRepository {
         }
     }
 
-    private suspend fun probe(host: String, port: Int): Int? = withContext(Dispatchers.IO) {
+    private suspend fun probe(server: VpnServer): Int? = withContext(Dispatchers.IO) {
+        val host = server.host
+        val port = server.port
         if (host.isBlank() || port !in 1..65535) return@withContext null
+        // A QUIC node listens on UDP, so a TCP connect always fails and the row
+        // would read "—" even on a node that works. Not measuring it is more
+        // honest than reporting a failure that means nothing.
+        if (server.protocol == VpnProtocol.HYSTERIA2) return@withContext null
         try {
             Socket().use { socket ->
                 val start = System.nanoTime()

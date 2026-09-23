@@ -445,8 +445,13 @@ object XrayConfigBuilder {
                         put("serverName", server.sni ?: server.hostHeader ?: server.host)
                         put("allowInsecure", server.allowInsecure)
                         server.fingerprint?.let { put("fingerprint", it) }
-                        if (server.alpn.isNotEmpty()) {
-                            putJsonArray("alpn") { server.alpn.forEach { add(it) } }
+                        // NOT the link's ALPN verbatim. A panel that advertises
+                        // `h2,http/1.1,h3` makes the server pick h2, and a
+                        // WebSocket node then cannot upgrade — see AlpnPolicy,
+                        // which documents the measurement.
+                        val alpn = AlpnPolicy.effective(server.alpn, server.transport, server.security)
+                        if (alpn.isNotEmpty()) {
+                            putJsonArray("alpn") { alpn.forEach { add(it) } }
                         }
                     }
                 }

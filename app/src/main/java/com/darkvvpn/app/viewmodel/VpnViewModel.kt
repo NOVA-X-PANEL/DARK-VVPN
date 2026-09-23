@@ -44,6 +44,17 @@ class VpnViewModel(
     val state: StateFlow<VpnState> = VpnConnectionManager.state
     val stats: StateFlow<VpnStats> = VpnConnectionManager.stats
 
+    /**
+     * The last failure, held until dismissed.
+     *
+     * Read by the Home screen's failure card. Unlike the old one-shot snackbar,
+     * this does not clear itself when read: the user decides when they are done
+     * with it.
+     */
+    val failure: StateFlow<String?> = VpnConnectionManager.failure
+
+    fun dismissFailure() = VpnConnectionManager.dismissFailure()
+
     val selectedServer: StateFlow<VpnServer?> =
         combine(serverRepository.servers, serverRepository.selectedServerId) { servers, id ->
             servers.firstOrNull { it.id == id }
@@ -106,6 +117,13 @@ class VpnViewModel(
         VpnConnectionManager.onDisconnected("VPN permission was not granted.")
     }
 
+    /**
+     * Clears the transient state after a failure has been acknowledged.
+     *
+     * Deliberately does not touch [failure]: dismissing the state is not the same
+     * as dismissing the explanation, and the two were previously the same call,
+     * which is why the text disappeared with the snackbar.
+     */
     fun consumeError() {
         val current = state.value
         if (current is VpnState.Error || (current is VpnState.Disconnected && current.lastError != null)) {

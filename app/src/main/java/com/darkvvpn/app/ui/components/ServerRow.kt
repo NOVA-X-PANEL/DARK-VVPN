@@ -1,5 +1,6 @@
 package com.darkvvpn.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +23,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.darkvvpn.app.R
 import com.darkvvpn.app.data.model.VpnServer
 
 /** One selectable node in the Servers list. */
@@ -112,7 +116,22 @@ fun ServerRow(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                PingBadge(pingMs = server.pingMs)
+                // A node the core cannot dial is labelled before the user picks it,
+                // rather than failing after they press connect. Hysteria2 is the
+                // case: it is QUIC-based and Xray has no outbound for it.
+                if (!server.protocol.isXrayNative) {
+                    Text(
+                        text = stringResource(R.string.servers_unsupported),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                } else {
+                    PingBadge(pingMs = server.pingMs)
+                }
                 if (selected) {
                     Icon(
                         imageVector = Icons.Filled.CheckCircle,

@@ -133,9 +133,22 @@ class DarkVvpnService : VpnService() {
 
             // Bring the core up off the main thread: startLoop parses the config
             // and builds the netstack, which is not a main-thread operation.
+            //
+            // Wrapped in a catch-all on purpose. `ensureInitialized` loads a native
+            // library, so a device whose CPU the core does not support throws
+            // UnsatisfiedLinkError from here — and before this guard that exception
+            // escaped into the service scope and took the process down instead of
+            // producing a message. Every failure has to become a message, because
+            // the message is the only thing that tells the user what to do.
             val failure = withContext(Dispatchers.IO) {
-                XrayCore.ensureInitialized(applicationContext)
-                XrayCore.start(config, interfaceDescriptor.fd)
+                try {
+                    XrayCore.ensureInitialized(applicationContext)
+                    XrayCore.start(config, interfaceDescriptor.fd)
+                } catch (t: Throwable) {
+                    val detail = t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName
+                    Log.e(TAG, "the tunnel core could not be started", t)
+                    "The tunnel core could not start on this device: $detail"
+                }
             }
 
             if (failure != null) {

@@ -100,11 +100,20 @@ class SubscriptionParser(
         val scheme = link.substringBefore("://", "").lowercase()
         val protocol = VpnProtocol.fromScheme(scheme) ?: return null
 
-        return when (protocol) {
+        val node = when (protocol) {
             VpnProtocol.VMESS -> parseVmess(link)
             VpnProtocol.SHADOWSOCKS -> parseShadowsocks(link)
             else -> parseStandard(link, protocol)
         }
+
+        // A panel that injects an announcement node does it with an endpoint that
+        // cannot resolve (`1.2.3.4.5:1234` with a "update your subscription" remark,
+        // in the list this was written against). Imported, it becomes a row that
+        // always fails; dropped, the list contains only things that can connect.
+        if (node != null && !HostValidator.isDialable(node.host)) return null
+
+        return node
+    }
     }
 
     // ==================================================================

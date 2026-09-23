@@ -45,12 +45,40 @@ object VpnConnectionManager {
 
     fun onDisconnected(error: String? = null) {
         _stats.value = VpnStats.Empty
+        if (error != null) rememberFailure(error)
         _state.value = VpnState.Disconnected(error)
     }
 
     fun onError(message: String) {
         _stats.value = VpnStats.Empty
+        rememberFailure(message)
         _state.value = VpnState.Error(message)
+    }
+
+    // ---- the readable failure card --------------------------------------
+
+    private val _failure = MutableStateFlow<String?>(null)
+
+    /**
+     * The last connection failure, held until the user dismisses it.
+     *
+     * This exists because a snackbar was the wrong home for a connection error: it
+     * auto-dismissed after four seconds, and the text — which is the *only* thing
+     * that says why a tunnel did not come up — was gone before it could be read.
+     * A failure is now a persistent card the user can read at their own pace and
+     * copy out (the text is selectable), and it is also appended to
+     * [coreStatus] so it survives a dismissal and lands in the diagnostics list.
+     */
+    val failure: StateFlow<String?> = _failure.asStateFlow()
+
+    private fun rememberFailure(message: String) {
+        if (message.isBlank()) return
+        _failure.value = message
+        onCoreStatus(message)
+    }
+
+    fun dismissFailure() {
+        _failure.value = null
     }
 
     // ---- core diagnostics ----------------------------------------------
