@@ -21,26 +21,34 @@
 
 ## What this is
 
-DARK VVPN is a **production-shaped client shell**: every part of the app that is
-*not* the packet tunnel is finished. Navigation, theming, state management,
-preference persistence, the `VpnService` lifecycle, the consent handshake and
-the foreground notification all work as they would in a shipped app.
+DARK VVPN is a working Android VPN client built on **Xray-core**. It imports
+subscriptions and share links, renders any node the core can dial into an Xray
+configuration, and runs it as a real system VPN: the traffic of every app on the
+device goes through the node.
 
-Node import, subscription refresh and config generation are done: a link from
-any panel becomes an [`XrayConfigBuilder`](app/src/main/java/com/darkvvpn/app/xray/XrayConfigBuilder.kt)
-outbound. The tunnel **data plane** — the loop that pumps packets between the tun
-fd and the core — is deliberately left as a well-marked integration point so you
-can drop in the core you actually use without rewriting the UI around it.
+Node import, subscription refresh, config generation **and the tunnel itself**
+are done. A link from any panel becomes a
+[`XrayConfigBuilder`](app/src/main/java/com/darkvvpn/app/xray/XrayConfigBuilder.kt)
+outbound, and the service hands the open tun descriptor to Xray-core, whose own
+network stack terminates the flows behind it.
 
-> **Status:** skeleton / reference implementation. It builds, runs and connects
-> to a tun interface, but it does not yet forward packets. See
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for exactly where the core
-> attaches.
+There is no tun2socks process and no packet pump in Kotlin: the core owns the
+descriptor. That is why the service is a few hundred lines rather than several
+thousand, and why the app supports every protocol the core does.
+
+> **Status:** working client. It opens a tun interface, hands the descriptor to
+> Xray-core, and carries traffic. See
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit.
+>
+> ⚠️ **The bundled node list uses `.invalid` hostnames** — they exist to
+> demonstrate the UI, not to route traffic. Import a real subscription or share
+> link on the **Subs** tab to connect to something.
 
 ## Features
 
 | | |
 |---|---|
+| **A real tunnel** | Xray-core in-process, driven through the tun file descriptor. Traffic from every app on the device goes through the node. |
 | **Every protocol** | VLESS, VMess, Trojan, Shadowsocks, WireGuard, SOCKS and HTTP, over TCP, WebSocket, gRPC, HTTP/2, HTTPUpgrade, SplitHTTP, XHTTP, QUIC and mKCP. |
 | **Every security layer** | TLS, REALITY (publicKey / shortId / spiderX) and XTLS, with uTLS fingerprints, SNI, ALPN and `xtls-rprx-vision` flow. |
 | **Subscription import** | Share links, base64 blobs, Clash YAML and sing-box JSON. A link can also be opened straight from another app. |
@@ -188,23 +196,50 @@ hand in `AppContainer` — no DI framework, because the graph is three objects
 deep. The full write-up, including the state machine and the exact place your
 tunnel core plugs in, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Adding your tunnel core
+## How the tunnel fits together
 
-1. Implement the packet pump in `DarkVvpnService.startPumpLoop()` — it is
-   already off the main thread, cancellable and passed the open tun fd.
-2. Replace the synthetic numbers in `startStatsLoop()` with counters from the
-   core's own accounting.
-3. Feed the config from `XrayConfigBuilder.build(server).rendered` into the core.
-4. Keep credentials out of plain `SharedPreferences`; use the Keystore-backed
-   storage of your choice and log only through `Redact`.
+```
+  app traffic
+       │  the system routes it here because of the tun routes
+       ▼
+  tun interface ──fd──► CoreController.startLoop(config, tunFd)
+       │                        │
+       │                        ▼
+       │                Xray's network stack terminates the TCP/IP flows
+       │                        │
+       └────────────────  the protocol outbound dials the node
+```
+
+Three files matter:
+
+| File | Responsibility |
+|---|---|
+| [`XrayConfigBuilder`](app/src/main/java/com/darkvvpn/app/xray/XrayConfigBuilder.kt) | Node → Xray document. The only place that knows Xray's schema. Also owns the tun address/gateway/MTU, because the config and the interface must agree. |
+| [`XrayCore`](app/src/main/java/com/darkvvpn/app/xray/XrayCore.kt) | The process's handle on the core: one-time environment setup, start with the fd, stop, real traffic counters, status callback. |
+| [`DarkVvpnService`](app/src/main/java/com/darkvvpn/app/vpn/DarkVvpnService.kt) | Opens the tun, hands over the descriptor, keeps the process alive, tears down in the right order. |
+
+### The one line that makes it work
+
+`builder.addDisallowedApplication(packageName)` in `establishTunInterface()`.
+Without it the core's *own* outbound sockets are routed back into the tun, and
+the tunnel connects while passing nothing at all. It is the single least obvious
+requirement in the whole project.
+
+### Swapping the core
+
+The core is fetched by pinned version and SHA-256 in `app/build.gradle.kts`. To
+use a different build, change `xrayCoreVersion`, `xrayCoreUrl` and
+`xrayCoreSha256`. The API surface this app depends on is three calls —
+`initCoreEnv`, `newCoreController` and `startLoop(config, tunFd)` — so a
+different Xray build with the same gomobile bindings drops in unchanged.
 
 ## Roadmap
 
 - [x] Xray config generation for every protocol and transport
 - [x] Subscription import and scheduled refresh
 - [x] In-app update with SHA-256 verification
-- [ ] Real packet forwarding behind a pluggable core interface
-- [ ] Per-app split tunnelling
+- [x] Real packet forwarding through Xray-core
+- [ ] Per-app split tunnelling (the plumbing is in place; the picker is not)
 - [ ] Real latency probes instead of the simulated ones
 - [ ] Quick Settings tile and home-screen shortcuts
 - [ ] Localisation (Persian, Arabic, Russian, Turkish, Chinese)

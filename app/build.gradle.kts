@@ -147,6 +147,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            // The core is a ~35 MB Go binary per ABI. Left uncompressed (the AGP
+            // default for a modern minSdk) three of them dominate the APK; storing
+            // them compressed and letting the installer unpack them cuts roughly
+            // 70 MB off the download. Go libraries load the same either way.
+            useLegacyPackaging = true
+        }
     }
 }
 

@@ -82,28 +82,94 @@ A ViewModel must not hold an Activity, so the split is:
 The ViewModel owns the decision; the composable owns the Activity call. Neither
 knows how the other does its job.
 
-## Where the tunnel core attaches
+## The tunnel, end to end
 
-`DarkVvpnService.startPumpLoop()` receives the open `ParcelFileDescriptor` and
-runs on `Dispatchers.IO`. That is the integration point. A real core replaces
-the parked `while` with:
+This is the part of the app that actually moves packets, so it is worth stating
+in full.
 
-```kotlin
-val input  = FileInputStream(descriptor.fileDescriptor)
-val output = FileOutputStream(descriptor.fileDescriptor)
-// hand `input` to the core, write what the core produces to `output`
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │ VpnService.Builder                                          │
+  │   addAddress(10.8.0.2/30)   addRoute(0.0.0.0/0)             │
+  │   addDnsServer(1.1.1.1)     addDisallowedApplication(self)  │
+  └──────────────────────────┬──────────────────────────────────┘
+                             │ establish()
+                             ▼
+                    tun interface (fd)
+                             │
+                             │  the descriptor crosses the boundary as an int
+                             ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │ CoreController.startLoop(configJson, tunFd)                 │
+  │   └── Xray-core                                             │
+  │         ├── tun inbound  → gVisor netstack terminates flows │
+  │         ├── routing      → ads blocked, LAN direct, rest →  │
+  │         └── outbound     → dials the node                   │
+  └─────────────────────────────────────────────────────────────┘
 ```
 
-Two rules matter here and both are easy to get wrong:
+### Why there is no tun2socks
 
-- the loop must stop as soon as the job is cancelled, or a reconnect leaks a
-  second pump on the same fd;
-- nothing in the pump may touch the main thread, including any logging that
-  could block.
+The obvious design for an Android VPN client is a userspace bridge: read
+packets from the tun fd, speak SOCKS to the core. That means shipping a second
+native library and a JNI shim, or writing a TCP/IP stack by hand.
 
-`startStatsLoop()` is the second integration point: it currently fabricates
-plausible numbers so the UI has something to animate. A real implementation
-replaces it with the core's own accounting.
+Xray-core already contains a `tun` inbound backed by gVisor's netstack, and the
+Android build exposes it through one extra argument:
+`startLoop(config, tunFd)`. The core takes the descriptor, terminates the flows
+arriving on it, and dials each one through the configured outbound. So the app
+carries **no** packet-forwarding code at all — the service opens an interface,
+hands over a number, and cleans up.
+
+That choice also decides the protocol story: because the core does the work, the
+app supports every protocol the core does, and Hysteria2 is the one case where it
+is not Xray's — which is why it is reported rather than mis-compiled.
+
+### The failure that looks like success
+
+`builder.addDisallowedApplication(packageName)`.
+
+The core dials the node from inside the same process. Without that exclusion,
+those outbound sockets are themselves captured by the tun routes, fed back into
+the netstack, and dialled again. The interface comes up, the notification
+appears, the state machine says **Connected**, and not one byte reaches the
+internet. There is no error anywhere, because nothing failed — the packets are
+just going in a circle.
+
+It is the single least obvious requirement in this codebase, and it is why the
+line carries a comment rather than appearing in a list of builder options.
+
+### Why the config owns the tun constants
+
+`TUN_CLIENT_ADDRESS`, `TUN_GATEWAY`, `TUN_PREFIX_LENGTH` and `TUN_MTU` live in
+`XrayConfigBuilder` and are read by `DarkVvpnService`. They are two halves of one
+agreement — the address Android assigns and the gateway the core answers on must
+fall inside the same prefix — and they are wired together at runtime by an int,
+so nothing at compile time forces them to match. `TunBridgeContractTest` asserts
+the relationship instead.
+
+### Shutdown order
+
+Stop the core, then close the interface, then stop the service. Closing the tun
+fd first leaves the core reading a dead descriptor; stopping the service first
+can leave the core holding an fd with no owner. `shutdownTunnel()` is the only
+place that tears anything down, and both `onRevoke` and `onDestroy` go through
+it, so there is one order rather than three.
+
+### Traffic counters
+
+`queryAllOutboundTrafficStats()` returns the core's counters **and resets
+them**, so each one-second sample is a true delta — which is what a throughput
+figure is. Totals are accumulated in the service because the core deliberately
+forgets. A real session timer falls out of the same loop.
+
+## Where the tunnel core attaches
+
+There is no pump loop to attach to any more. The core takes the descriptor
+through `CoreController.startLoop(config, tunFd)` and owns everything behind it —
+see "The tunnel, end to end" above. What remains the app's responsibility is the
+lifecycle: opening the interface with the right routes, excluding the app from
+its own tunnel, and tearing down in an order the core tolerates.
 
 ## Package responsibilities
 
