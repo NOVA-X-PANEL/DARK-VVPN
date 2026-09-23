@@ -39,7 +39,7 @@ class HttpFetchRobustnessTest {
 
     private fun inflate(bytes: ByteArray): String =
         java.util.zip.GZIPInputStream(bytes.inputStream()).use {
-            it.readBytes().toString(Charsets.UTF_8.name())
+            it.readBytes().toString(Charsets.UTF_8)
         }
 
     // ------------------------------------------------------------------
@@ -65,7 +65,7 @@ class HttpFetchRobustnessTest {
     fun `reading compressed bytes as text yields nothing, which is the bug`() {
         // What the old code did. This asserts the failure mode is real, so the
         // decompression above is not decorative.
-        val asText = gzip(subscriptionBody).toString(Charsets.UTF_8.name())
+        val asText = gzip(subscriptionBody).toString(Charsets.UTF_8)
         assertTrue(
             "compressed bytes read as text must not produce nodes",
             SubscriptionParser().parse(asText).servers.isEmpty(),
