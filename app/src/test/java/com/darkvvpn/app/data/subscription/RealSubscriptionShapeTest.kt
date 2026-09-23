@@ -1,5 +1,6 @@
 package com.darkvvpn.app.data.subscription
 
+import com.darkvvpn.app.data.model.SubscriptionFormat
 import com.darkvvpn.app.data.model.VpnProtocol
 import com.darkvvpn.app.data.model.VpnSecurity
 import com.darkvvpn.app.data.model.VpnTransport
