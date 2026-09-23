@@ -8,6 +8,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.darkvvpn.app.data.model.VpnStats
 import com.darkvvpn.app.xray.XrayConfigBuilder
 import com.darkvvpn.app.xray.XrayCore
 import kotlinx.coroutines.CoroutineScope
