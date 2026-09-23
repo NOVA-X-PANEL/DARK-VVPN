@@ -113,9 +113,16 @@ class UpdateViewModel(
         // Draw the badge from storage before anything touches the network, so it
         // is on screen the instant the app opens.
         viewModelScope.launch {
-            settingsRepository.settings.collect { settings ->
-                settingsSnapshot = settings
-                refreshBadgeFromSettings(settings)
+            // A storage failure here would otherwise reach the default handler and
+            // crash on launch, from a collector whose only job is to draw a badge.
+            try {
+                settingsRepository.settings.collect { settings ->
+                    settingsSnapshot = settings
+                    refreshBadgeFromSettings(settings)
+                }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                // No badge is the correct outcome when the setting cannot be read.
             }
         }
 

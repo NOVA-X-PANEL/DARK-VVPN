@@ -174,10 +174,14 @@ class AppStartupTest {
     fun `main activity launches, composes, and survives a recreate`() {
         val app = ApplicationProvider.getApplicationContext<DarkVvpnApplication>()
 
-        // Turn the launch-time update check off before the activity composes. It
-        // performs a real HTTPS request, and a test that reaches the network is a
-        // test that fails on a build machine with no egress.
-        runBlocking { app.container.settingsRepository.setCheckForUpdatesOnLaunch(false) }
+        // Turn every launch-time side effect off before the activity composes.
+        // They reach the network and the clock, and work left running when
+        // Robolectric tears the environment down surfaces later as an uncaught
+        // exception attributed to whichever test happens to be running.
+        runBlocking {
+            app.container.settingsRepository.setCheckForUpdatesOnLaunch(false)
+            app.container.settingsRepository.setAutoConnect(false)
+        }
 
         // setup() = create + start + resume + attach to a window.
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()

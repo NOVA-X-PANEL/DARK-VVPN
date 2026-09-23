@@ -68,23 +68,38 @@ class SubscriptionsViewModel(
 
     init {
         viewModelScope.launch {
-            // Loading restores both the subscription list and its cached node
-            // list from disk. The nodes must then be pushed into the catalogue:
-            // this is the step whose absence made an imported subscription show
-            // an empty Servers screen until the next scheduled refresh.
-            repository.load()
-            publishNodes()
+            // Guarded because this coroutine runs on the ViewModel scope, where an
+            // uncaught exception reaches the default handler and takes the process
+            // down. A storage read is not supposed to fail, but "not supposed to"
+            // is not a guarantee, and an app that cannot open because a preferences
+            // file is unreadable is worse than one that opens with an empty list.
+            try {
+                // Loading restores both the subscription list and its cached node
+                // list from disk. The nodes must then be pushed into the
+                // catalogue: this is the step whose absence made an imported
+                // subscription show an empty Servers screen until the next
+                // scheduled refresh.
+                repository.load()
+                publishNodes()
 
-            // If a subscription has no cached nodes — a first run, or a cache
-            // written by an older schema — fetch now rather than waiting for the
-            // interval. Otherwise a restart inside the refresh window leaves the
-            // user with nothing to connect to.
-            if (repository.hasSubscriptionsWithoutNodes()) {
-                val settings = settingsRepository.settings.first()
-                if (!settings.subscriptionRefreshOverWifiOnly || networkIsUnmetered()) {
-                    repository.refreshAllAuto(settings.subscriptionUserAgent)
-                    publishNodes()
+                // If a subscription has no cached nodes — a first run, or a cache
+                // written by an older schema — fetch now rather than waiting for
+                // the interval. Otherwise a restart inside the refresh window
+                // leaves the user with nothing to connect to.
+                if (repository.hasSubscriptionsWithoutNodes()) {
+                    val settings = settingsRepository.settings.first()
+                    if (!settings.subscriptionRefreshOverWifiOnly || networkIsUnmetered()) {
+                        repository.refreshAllAuto(settings.subscriptionUserAgent)
+                        publishNodes()
+                    }
                 }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                _message.value = SubscriptionMessage(
+                    "Stored subscriptions could not be read: " +
+                        (t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName),
+                    isError = true,
+                )
             }
         }
     }

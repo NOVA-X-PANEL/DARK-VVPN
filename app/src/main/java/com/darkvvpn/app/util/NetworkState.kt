@@ -36,7 +36,15 @@ object NetworkState {
         unmetered = queryUnmetered(context)
     }
 
-    private fun queryUnmetered(context: Context): Boolean {
+    /**
+     * Reads connectivity, treating any failure as "metered".
+     *
+     * Every call is wrapped: this runs from a lifecycle observer, and a throw there
+     * reaches the caller's scope. "Metered" is also the safe answer — it means an
+     * automatic refresh is skipped rather than run on a connection that might be
+     * mobile data.
+     */
+    private fun queryUnmetered(context: Context): Boolean = try {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
         val network = manager.activeNetwork ?: return false
@@ -47,6 +55,8 @@ object NetworkState {
         // rather than the presence of a specific transport.
         val hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         val notMetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-        return hasInternet && notMetered
+        hasInternet && notMetered
+    } catch (t: Throwable) {
+        false
     }
 }

@@ -69,11 +69,21 @@ class VpnViewModel(
 
     init {
         // Restore the last selection (or pick the first node) once, at startup.
+        // Guarded: this collector runs for the ViewModel's whole life, and an
+        // uncaught storage failure would reach the default handler and crash the
+        // app from a coroutine whose only job is remembering which node was used.
         viewModelScope.launch {
-            settingsRepository.settings.collect { settings ->
-                if (settings.lastServerId != null && serverRepository.selectedServerId.value == null) {
-                    serverRepository.select(settings.lastServerId)
+            try {
+                settingsRepository.settings.collect { settings ->
+                    if (settings.lastServerId != null &&
+                        serverRepository.selectedServerId.value == null
+                    ) {
+                        serverRepository.select(settings.lastServerId)
+                    }
                 }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                // Losing the remembered server is not worth a crash.
             }
         }
         serverRepository.selectFirstIfNone()
