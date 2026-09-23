@@ -7,10 +7,13 @@
 **A dark-first Android VPN client — Kotlin · Jetpack Compose · Material 3**
 
 [![Android CI](https://github.com/NOVA-X-PANEL/DARK-VVPN/actions/workflows/android.yml/badge.svg)](https://github.com/NOVA-X-PANEL/DARK-VVPN/actions/workflows/android.yml)
+[![Release](https://img.shields.io/github/v/release/NOVA-X-PANEL/DARK-VVPN?include_prereleases&label=download&color=7C4DFF)](https://github.com/NOVA-X-PANEL/DARK-VVPN/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Android%2024%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.12-4285F4?logo=jetpackcompose&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+
+**[⬇ Download the latest APK](https://github.com/NOVA-X-PANEL/DARK-VVPN/releases/latest)** — debug build, ready to sideload.
 
 </div>
 
