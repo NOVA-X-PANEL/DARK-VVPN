@@ -114,7 +114,6 @@ class SubscriptionParser(
 
         return node
     }
-    }
 
     // ==================================================================
     // vless / trojan / hysteria2 / socks / http
