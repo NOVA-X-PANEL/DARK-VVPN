@@ -182,11 +182,16 @@ class ComposeResourceSafetyTest {
             .filter { it.isDirectory && (it.name == prefix || it.name.startsWith("$prefix-")) }
 
     /**
-     * Removes `/* … *\/` blocks and `//` line comments.
+     * Removes block comments and line comments.
      *
-     * The `//` rule skips a slash pair preceded by a colon, so a URL inside a
-     * string literal (`"https://…"`) is not mistaken for the start of a comment
-     * and does not silently truncate a line that a check needs to see.
+     * The line-comment rule skips a slash pair preceded by a colon, so a URL
+     * inside a string literal ("https:" followed by "//host") is not mistaken for
+     * the start of a comment and cannot silently hide a line of code from the
+     * checks above.
+     *
+     * Note: Kotlin nests block comments, so this doc deliberately does not spell
+     * the opening delimiter out — writing it here would open a nested comment and
+     * swallow the rest of the file.
      */
     private fun stripComments(text: String): String =
         text.replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
