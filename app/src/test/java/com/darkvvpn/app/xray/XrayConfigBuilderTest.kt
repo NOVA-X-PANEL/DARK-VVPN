@@ -34,6 +34,10 @@ class XrayConfigBuilderTest {
     private fun JsonObject.str(key: String): String? =
         (this[key] as? JsonPrimitive)?.content
 
+    /** The `routing.rules` array, which most assertions here inspect. */
+    private fun JsonObject.routingRules(): List<JsonObject> =
+        this["routing"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+
     private fun baseVless() = VpnServer(
         name = "test",
         host = "example.com",
@@ -51,6 +55,7 @@ class XrayConfigBuilderTest {
         val doc = success(baseVless()).document
 
         assertNotNull("log section", doc["log"])
+        assertNotNull("stats policy (needed for the traffic counters)", doc["policy"])
         assertNotNull("inbounds section", doc["inbounds"])
         assertNotNull("outbounds section", doc["outbounds"])
         assertNotNull("routing section", doc["routing"])
@@ -60,6 +65,38 @@ class XrayConfigBuilderTest {
             .map { it.jsonObject["tag"]?.jsonPrimitive?.content }
         assertTrue(tags.contains(XrayConfigBuilder.OUTBOUND_TAG_DIRECT))
         assertTrue(tags.contains(XrayConfigBuilder.OUTBOUND_TAG_BLOCK))
+    }
+
+    @Test
+    fun `the tun inbound is present and correctly shaped`() {
+        // Without this inbound the core has nothing to attach the tun fd to.
+        val doc = success(baseVless()).document
+        val tun = doc["inbounds"]!!.jsonArray
+            .map { it.jsonObject }
+            .first { it["protocol"]?.jsonPrimitive?.content == "tun" }
+
+        val settings = tun["settings"]!!.jsonObject
+        assertEquals("xray0", settings.str("name"))
+        assertEquals(1500, settings["mtu"]!!.jsonPrimitive.content.toInt())
+        assertEquals(8, settings["userLevel"]!!.jsonPrimitive.content.toInt())
+
+        // The gateway must be the counterpart of the address Android is handed.
+        val gateways = settings["gateway"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(listOf(XrayConfigBuilder.TUN_GATEWAY), gateways)
+
+        // autoSystemRoutingTable rewrites the host table and needs root on
+        // Android; VpnService owns routing instead.
+        assertNull(settings["autoSystemRoutingTable"])
+    }
+
+    @Test
+    fun `the core client address and gateway share a prefix`() {
+        // A tunnel whose two halves disagree establishes and then drops
+        // everything, so the relationship is asserted rather than assumed.
+        val client = XrayConfigBuilder.TUN_CLIENT_ADDRESS
+        val gateway = XrayConfigBuilder.TUN_GATEWAY
+        assertEquals(client.substringBeforeLast('.'), gateway.substringBeforeLast('.'))
+        assertEquals(30, XrayConfigBuilder.TUN_PREFIX_LENGTH)
     }
 
     @Test
@@ -364,9 +401,7 @@ class XrayConfigBuilderTest {
 
     @Test
     fun `ad blocking adds a blackhole rule`() {
-        val doc = success(baseVless()).document
-        val rules = doc["routing"]!!.jsonObject["rules"]!!.jsonArray
-            .map { it.jsonObject }
+        val rules = success(baseVless()).document.routingRules()
         val blockRule = rules.firstOrNull {
             it["outboundTag"]?.jsonPrimitive?.content == XrayConfigBuilder.OUTBOUND_TAG_BLOCK
         }
@@ -379,8 +414,7 @@ class XrayConfigBuilderTest {
     fun `disabling ad blocking removes the blackhole rule`() {
         val result = XrayConfigBuilder.build(baseVless(), blockAds = false)
         assertTrue(result.isSuccess)
-        val rules = (result as XrayConfigResult.Success).document["routing"]!!
-            .jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val rules = (result as XrayConfigResult.Success).document.routingRules()
         assertFalse(
             rules.any {
                 it["outboundTag"]?.jsonPrimitive?.content == XrayConfigBuilder.OUTBOUND_TAG_BLOCK
@@ -389,10 +423,33 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `the default rule sends all network traffic to the proxy`() {
-        val doc = success(baseVless()).document
-        val first = doc["routing"]!!.jsonObject["rules"]!!.jsonArray[0].jsonObject
-        assertEquals(XrayConfigBuilder.OUTBOUND_TAG_PROXY, first.str("outboundTag"))
-        assertEquals("tcp,udp", first["network"]!!.jsonArray[0].jsonPrimitive.content)
+    fun `the catch-all proxy rule is last`() {
+        // Xray stops at the first matching rule. If the catch-all came first it
+        // would swallow every packet and silently disable the ad blocker and the
+        // LAN bypass, which is exactly the bug this asserts against.
+        val rules = success(baseVless()).document.routingRules()
+        val last = rules.last()
+        assertEquals(XrayConfigBuilder.OUTBOUND_TAG_PROXY, last.str("outboundTag"))
+        assertEquals("tcp,udp", last["network"]!!.jsonArray[0].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `specific rules precede the catch-all`() {
+        val rules = success(baseVless()).document.routingRules()
+        val tags = rules.map { it["outboundTag"]?.jsonPrimitive?.content }
+        val proxyIndex = tags.indexOf(XrayConfigBuilder.OUTBOUND_TAG_PROXY)
+        assertEquals("the proxy catch-all must be the final rule", rules.lastIndex, proxyIndex)
+        assertTrue("the LAN bypass must come before it", tags.indexOf(XrayConfigBuilder.OUTBOUND_TAG_DIRECT) < proxyIndex)
+        assertTrue("the ad blocker must come before it", tags.indexOf(XrayConfigBuilder.OUTBOUND_TAG_BLOCK) < proxyIndex)
+    }
+
+    @Test
+    fun `private address space bypasses the tunnel`() {
+        val rules = success(baseVless()).document.routingRules()
+        val direct = rules.first {
+            it["outboundTag"]?.jsonPrimitive?.content == XrayConfigBuilder.OUTBOUND_TAG_DIRECT
+        }
+        val ips = direct["ip"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertTrue(ips.any { it.contains("private") })
     }
 }

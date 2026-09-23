@@ -16,6 +16,8 @@ import com.darkvvpn.app.data.repository.ServerRepository
 import com.darkvvpn.app.data.repository.SettingsRepository
 import com.darkvvpn.app.vpn.DarkVvpnService
 import com.darkvvpn.app.vpn.VpnConnectionManager
+import com.darkvvpn.app.xray.XrayConfigBuilder
+import com.darkvvpn.app.xray.XrayConfigResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -93,7 +95,7 @@ class VpnViewModel(
             VpnConnectionManager.onError("No server selected.")
             return
         }
-        DarkVvpnService.start(context, server.id, server.name)
+        launchTunnel(context, server)
     }
 
     /** Called by the Activity when the user declines, or the launch fails. */
@@ -116,7 +118,38 @@ class VpnViewModel(
             VpnConnectionManager.onAwaitingPermission()
             _pendingPermissionIntent.value = consent
         } else {
-            DarkVvpnService.start(context, server.id, server.name)
+            launchTunnel(context, server)
+        }
+    }
+
+    /**
+     * Renders the node into an Xray document and hands it to the service.
+     *
+     * The config is built here, while the tunnel is still disconnected, so a node
+     * that cannot produce a valid config fails with a named reason *before* the
+     * VPN interface is opened — rather than establishing a tunnel that silently
+     * forwards nothing.
+     */
+    private fun launchTunnel(context: Context, server: VpnServer) {
+        viewModelScope.launch {
+            val blockAds = settingsRepository.settings.first().blockAdsAndTrackers
+
+            when (val result = XrayConfigBuilder.build(server, blockAds = blockAds)) {
+                is XrayConfigResult.Success -> {
+                    pendingServer = null
+                    DarkVvpnService.start(context, server.id, server.name, result.rendered)
+                }
+
+                is XrayConfigResult.UnsupportedProtocol -> {
+                    pendingServer = null
+                    VpnConnectionManager.onError(result.reason)
+                }
+
+                is XrayConfigResult.InvalidNode -> {
+                    pendingServer = null
+                    VpnConnectionManager.onError(result.reason)
+                }
+            }
         }
     }
 

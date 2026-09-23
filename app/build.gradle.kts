@@ -5,6 +5,80 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/* ---------------------------------------------------------------------------
+ * The tunnel core.
+ *
+ * DARK VVPN uses Xray-core, compiled for Android as a Go mobile library by
+ * AndroidLibXrayLite — the same artefact v2rayNG ships, so the integration path
+ * is a well-trodden one rather than a guess.
+ *
+ * It is downloaded at build time rather than committed: it is ~62 MB, which
+ * would live in every clone of this repository forever. The version and the
+ * SHA-256 are pinned below, and a mismatch fails the build, because a substituted
+ * core is a full device compromise — the one dependency in this project where
+ * "download whatever the URL serves" is not acceptable.
+ * --------------------------------------------------------------------------- */
+val xrayCoreVersion = "26.9.9"
+val xrayCoreSha256 = "9ecf4c921568d8f4cb8550d3bafe08ff6f1d1984f45a6ad183dcdf52ee9302de"
+val xrayCoreUrl =
+    "https://github.com/2dust/AndroidLibXrayLite/releases/download/v$xrayCoreVersion/libv2ray.aar"
+
+val xrayCoreAar = layout.projectDirectory.file("libs/libv2ray-$xrayCoreVersion.aar")
+
+/** Downloads and verifies the core, skipping the work when it is already right. */
+val fetchXrayCore by tasks.registering {
+    val target = xrayCoreAar.asFile
+    outputs.file(xrayCoreAar)
+    // Re-run only when the inputs change; the file itself is a cache.
+    inputs.property("version", xrayCoreVersion)
+    inputs.property("sha256", xrayCoreSha256)
+
+    doLast {
+        if (target.exists() && sha256(target) == xrayCoreSha256) {
+            logger.lifecycle("Xray core $xrayCoreVersion already present and verified.")
+            return@doLast
+        }
+        target.parentFile.mkdirs()
+        val partial = File(target.parentFile, "${target.name}.part")
+        logger.lifecycle("Downloading Xray core $xrayCoreVersion…")
+        java.net.URI(xrayCoreUrl).toURL().openStream().use { input ->
+            partial.outputStream().buffered().use { output -> input.copyTo(output) }
+        }
+        val actual = sha256(partial)
+        if (actual != xrayCoreSha256) {
+            partial.delete()
+            throw GradleException(
+                "Xray core digest mismatch. Expected $xrayCoreSha256 but got $actual. " +
+                    "The download was discarded; check the pinned version in app/build.gradle.kts.",
+            )
+        }
+        target.delete()
+        if (!partial.renameTo(target)) {
+            partial.delete()
+            throw GradleException("Could not store the Xray core at ${target.absolutePath}.")
+        }
+        logger.lifecycle("Xray core $xrayCoreVersion downloaded and verified.")
+    }
+}
+
+fun sha256(file: File): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { stream ->
+        val buffer = ByteArray(1 shl 16)
+        while (true) {
+            val read = stream.read(buffer)
+            if (read <= 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+// The core must exist before anything compiles against it.
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(fetchXrayCore) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("NativeLibs") }
+    .configureEach { dependsOn(fetchXrayCore) }
+
 android {
     namespace = "com.darkvvpn.app"
     compileSdk = 35
@@ -13,12 +87,18 @@ android {
         applicationId = "com.darkvvpn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+
+        // The core ships four ABIs; x86 (32-bit) is the only one no device or
+        // current emulator needs, and dropping it saves ~35 MB from the APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 
@@ -63,6 +143,9 @@ android {
 }
 
 dependencies {
+    // The tunnel core (Xray-core via gomobile). Downloaded and verified above.
+    implementation(files(xrayCoreAar))
+
     // Core & lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

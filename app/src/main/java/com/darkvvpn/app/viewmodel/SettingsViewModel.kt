@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.darkvvpn.app.DarkVvpnApplication
 import com.darkvvpn.app.data.model.AppSettings
 import com.darkvvpn.app.data.repository.SettingsRepository
+import com.darkvvpn.app.vpn.VpnConnectionManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -52,6 +53,13 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     }
 
     fun clearSkippedUpdate() = launch { repository.setSkippedUpdateTag(null) }
+
+    // ---- diagnostics ---------------------------------------------------
+
+    /** Status lines the tunnel core emitted, newest last. */
+    val coreStatus: StateFlow<List<String>> = VpnConnectionManager.coreStatus
+
+    fun clearCoreStatus() = VpnConnectionManager.clearCoreStatus()
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

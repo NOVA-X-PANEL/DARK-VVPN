@@ -105,7 +105,13 @@
     <string name="settings_dark_theme">Dark theme</string>
     <string name="settings_dynamic_color">Dynamic color</string>
     <string name="settings_version">Version</string>
+    <string name="settings_core_version">Tunnel core</string>
     <string name="settings_developer">Developer</string>
+
+    <!-- Diagnostics -->
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="settings_diagnostics_empty">No core messages yet. Connect once and any dial or handshake errors will appear here.</string>
+    <string name="settings_diagnostics_clear">Clear</string>
 
     <!-- Common -->
     <string name="action_ok">OK</string>

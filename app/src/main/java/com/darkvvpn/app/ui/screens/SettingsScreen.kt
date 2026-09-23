@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import com.darkvvpn.app.BuildConfig
 import com.darkvvpn.app.R
 import com.darkvvpn.app.ui.components.SectionHeader
 import com.darkvvpn.app.viewmodel.SettingsViewModel
+import com.darkvvpn.app.xray.XrayCore
 
 @Composable
 fun SettingsScreen(
@@ -45,6 +47,12 @@ fun SettingsScreen(
     // `settings` comes from a delegated property, so a null-check on one of its
     // fields cannot smart-cast inside a lambda. Capture it once instead.
     val skippedTag = settings.skippedUpdateTag
+
+    val coreStatus by viewModel.coreStatus.collectAsStateWithLifecycle()
+
+    // The core reports its version only once it has been initialised, which
+    // happens on the first connect. Read it lazily rather than forcing init here.
+    val coreVersion = remember { XrayCore.version() }
 
     Column(
         modifier = Modifier
@@ -200,9 +208,56 @@ fun SettingsScreen(
             )
             RowDivider()
             InfoRow(
+                label = stringResource(R.string.settings_core_version),
+                value = coreVersion,
+            )
+            RowDivider()
+            InfoRow(
                 label = stringResource(R.string.settings_developer),
                 value = "NOVA-X-PANEL",
             )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ---- diagnostics ----
+        // "Connected but nothing loads" is the most common tunnel complaint, and
+        // the core's own status lines are the only place that says why.
+        SectionHeader(title = stringResource(R.string.settings_diagnostics))
+        Spacer(Modifier.height(10.dp))
+        SettingsCard {
+            if (coreStatus.isEmpty()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_diagnostics_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .padding(14.dp)
+                        .heightIn(max = 200.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    coreStatus.forEach { line ->
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 2.dp),
+                        )
+                    }
+                }
+                RowDivider()
+                TextButton(
+                    onClick = viewModel::clearCoreStatus,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                ) {
+                    Text(stringResource(R.string.settings_diagnostics_clear))
+                }
+            }
         }
 
         Spacer(Modifier.height(32.dp))

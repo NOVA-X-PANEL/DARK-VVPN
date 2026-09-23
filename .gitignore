@@ -3,6 +3,12 @@
 build/
 app/build/
 
+# The tunnel core is downloaded and hash-verified at build time (see
+# app/build.gradle.kts) rather than committed: it is ~62 MB and would otherwise
+# live in every clone of this repository forever.
+app/libs/*.aar
+app/libs/*.aar.part
+
 # Local configuration — never commit these
 local.properties
 keystore.properties

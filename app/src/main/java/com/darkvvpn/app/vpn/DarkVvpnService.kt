@@ -1,67 +1,91 @@
 package com.darkvvpn.app.vpn
 
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import com.darkvvpn.app.data.model.VpnStats
+import com.darkvvpn.app.xray.XrayConfigBuilder
+import com.darkvvpn.app.xray.XrayCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.random.Random
+import kotlinx.coroutines.withContext
 
 /**
- * DARK VVPN's [VpnService] implementation.
+ * DARK VVPN's [VpnService]: this is where the tunnel becomes real.
  *
- * ── What this file actually does ─────────────────────────────────────────────
- * It performs the *platform* half of a VPN client: it becomes a foreground
- * service, asks the system for a tun interface with `Builder.establish()`,
- * routes all traffic through it, and tears everything down on disconnect.
+ * ── How the traffic actually flows ───────────────────────────────────────────
  *
- * ── What it deliberately does NOT do ─────────────────────────────────────────
- * It does not forward packets. The skeleton measures the session and reports
- * counters so the UI is fully exercisable, but the read/write loop that pumps
- * frames between the tun fd and the upstream core is the integration point for
- * your tunnel core (Xray / sing-box / WireGuard) — see [startPumpLoop].
+ *   app traffic
+ *        │  the system routes it here because of the tun routes below
+ *        ▼
+ *   tun interface  ──fd──►  XrayCore.startLoop(config, fd)
+ *        │                        │
+ *        │                        ▼
+ *        │                 Xray's gVisor netstack terminates the TCP/IP flows
+ *        │                        │
+ *        │                        ▼
+ *        └──────────────    the protocol outbound dials the node
  *
- * SECURITY NOTE: when you add the real core, remember that the panel/API
- * credentials must be injected from encrypted storage and must never be written
- * to logcat; use [com.darkvvpn.app.util.Redact].
+ * There is no tun2socks process and no packet pump in Kotlin: the core owns the
+ * tun descriptor and the whole network stack behind it. This service's job is
+ * therefore narrow and important — open the interface, hand over the descriptor,
+ * keep the process alive, and tear all of it down cleanly in the right order.
+ *
+ * ── The one setting that makes or breaks it ──────────────────────────────────
+ * `addDisallowedApplication(packageName)`. Without it the core's *outbound*
+ * sockets are themselves routed into the tun, the traffic loops back into the
+ * netstack, and the tunnel connects while passing nothing. Excluding our own
+ * package is what breaks that cycle.
+ *
+ * ── Shutdown order ───────────────────────────────────────────────────────────
+ * Stop the core, then close the interface, then stop the service. Closing the
+ * tun fd first leaves the core reading a dead descriptor; stopping the service
+ * first can leave the core holding the fd with no owner. The order in
+ * [shutdownTunnel] is deliberate.
  */
 class DarkVvpnService : VpnService() {
 
     private var tunInterface: ParcelFileDescriptor? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var configJob: Job? = null
     private var statsJob: Job? = null
-    private var pumpJob: Job? = null
+    private var tunnelJob: Job? = null
 
-    /** Address handed to the device inside the tunnel. */
-    private val tunnelAddress = "10.8.0.2"
-    private val tunnelPrefix = 32
-    private val dnsServers = listOf("1.1.1.1", "1.0.0.1")
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var connectedAtMillis: Long = 0L
+
+    /** Running totals, accumulated across the per-tick deltas the core reports. */
+    private val totals = MutableStateFlow(VpnStats.Empty)
 
     override fun onCreate() {
         super.onCreate()
         VpnNotifications.ensureChannel(this)
+        // Surface core warnings (dial failures, TLS errors) in the UI log stream.
+        XrayCore.statusListener = { status ->
+            VpnConnectionManager.onCoreStatus(status)
+        }
         Log.i(TAG, "service created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startTunnel(
-                serverId = intent.getStringExtra(EXTRA_SERVER_ID).orEmpty(),
-                serverName = intent.getStringExtra(EXTRA_SERVER_NAME).orEmpty(),
-            )
+            ACTION_START -> {
+                val serverId = intent.getStringExtra(EXTRA_SERVER_ID).orEmpty()
+                val serverName = intent.getStringExtra(EXTRA_SERVER_NAME).orEmpty()
+                val config = intent.getStringExtra(EXTRA_CONFIG).orEmpty()
+                startTunnel(serverId, serverName, config)
+            }
 
             ACTION_STOP -> stopTunnel()
             else -> Log.w(TAG, "onStartCommand with unknown action: ${intent?.action}")
@@ -71,163 +95,233 @@ class DarkVvpnService : VpnService() {
         return Service.START_NOT_STICKY
     }
 
-    // ---- tunnel lifecycle --------------------------------------------------
+    // ==================================================================
+    // Start
+    // ==================================================================
 
-    private fun startTunnel(serverId: String, serverName: String) {
-        if (tunInterface != null) {
+    private fun startTunnel(serverId: String, serverName: String, config: String) {
+        if (tunInterface != null || tunnelJob?.isActive == true) {
             Log.w(TAG, "startTunnel ignored: already running")
+            return
+        }
+        if (config.isBlank()) {
+            VpnConnectionManager.onError("No tunnel configuration was supplied.")
             return
         }
 
         VpnConnectionManager.onConnecting()
         goForeground()
 
+        tunnelJob = scope.launch {
+            val interfaceDescriptor = try {
+                establishTunInterface()
+            } catch (t: Throwable) {
+                Log.e(TAG, "failed to establish the tun interface", t)
+                null
+            }
+
+            if (interfaceDescriptor == null) {
+                VpnConnectionManager.onError(
+                    "Android refused the VPN interface. Another VPN may be active.",
+                )
+                teardownForeground()
+                stopSelf()
+                return@launch
+            }
+            tunInterface = interfaceDescriptor
+
+            // Bring the core up off the main thread: startLoop parses the config
+            // and builds the netstack, which is not a main-thread operation.
+            val failure = withContext(Dispatchers.IO) {
+                XrayCore.ensureInitialized(applicationContext)
+                XrayCore.start(config, interfaceDescriptor.fd)
+            }
+
+            if (failure != null) {
+                VpnConnectionManager.onError(failure)
+                shutdownTunnel()
+                stopSelf()
+                return@launch
+            }
+
+            connectedAtMillis = System.currentTimeMillis()
+            VpnConnectionManager.onConnected(serverId, serverName, connectedAtMillis)
+            Log.i(TAG, "tunnel established on $serverName")
+
+            startStatsLoop()
+        }
+    }
+
+    /**
+     * Opens the tun interface with the routes, resolver and MTU the core's config
+     * expects.
+     *
+     * Every value here has a counterpart in [XrayConfigBuilder] — the address,
+     * the prefix and the MTU are shared constants on purpose, because a tunnel
+     * whose two halves disagree establishes successfully and then silently drops
+     * every packet, which is the hardest possible failure to diagnose.
+     */
+    private fun establishTunInterface(): ParcelFileDescriptor? {
         val builder = Builder()
             .setSession(SESSION_NAME)
-            .setMtu(MTU)
-            .addAddress(tunnelAddress, tunnelPrefix)
+            .setMtu(XrayConfigBuilder.TUN_MTU)
+            .addAddress(XrayConfigBuilder.TUN_CLIENT_ADDRESS, XrayConfigBuilder.TUN_PREFIX_LENGTH)
 
-        // Full-tunnel configuration: every destination goes through the tun.
-        // A split-tunnel build narrows these routes (or excludes them with
-        // addDisallowedApplication) instead.
+        // Full tunnel: every destination, v4 and v6, goes through the tun.
         builder.addRoute("0.0.0.0", 0)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             runCatching { builder.addRoute("::", 0) }
         }
-        dnsServers.forEach { runCatching { builder.addDnsServer(it) } }
+
+        XrayConfigBuilder.TUN_DNS_SERVERS.forEach { server ->
+            runCatching { builder.addDnsServer(server) }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
-            runCatching { builder.setBlocking(true) }
         }
 
-        val descriptor = try {
+        // THE critical line: our own package must stay outside the tunnel, or the
+        // core's outbound sockets are routed back into it and nothing flows.
+        runCatching { builder.addDisallowedApplication(packageName) }
+            .onFailure { Log.e(TAG, "could not exclude our own package from the tunnel", it) }
+
+        return try {
             builder.establish()
         } catch (t: Throwable) {
             Log.e(TAG, "establish() failed", t)
             null
         }
-
-        if (descriptor == null) {
-            Log.e(TAG, "establish() returned null")
-            VpnConnectionManager.onError("The system refused the VPN interface (another VPN may be active).")
-            teardownForeground()
-            return
-        }
-
-        tunInterface = descriptor
-        connectedAtMillis = System.currentTimeMillis()
-        VpnConnectionManager.onConnected(serverId, serverName, connectedAtMillis)
-        Log.i(TAG, "tunnel established for ${if (serverName.isBlank()) "unknown" else serverName}")
-
-        startPumpLoop(descriptor)
-        startStatsLoop()
     }
+
+    // ==================================================================
+    // Stop
+    // ==================================================================
 
     private fun stopTunnel() {
         VpnConnectionManager.onDisconnecting()
-        shutdown()
+        // The core is stopped outside the coroutine scope so the teardown still
+        // happens if the scope is being cancelled (a normal race on stop).
+        shutdownTunnel()
         VpnConnectionManager.onDisconnected()
-        // Tear the service down itself: a START_NOT_STICKY service that has been
-        // asked to stop must not linger waiting for the next command.
         stopSelf()
     }
 
-    /** Releases the tun fd and stops both loops. Safe to call repeatedly. */
-    private fun shutdown() {
-        pumpJob?.cancel()
+    /**
+     * Tears everything down in the only order that is safe: core first, then the
+     * interface, then the foreground notification. Safe to call repeatedly —
+     * [onRevoke] and [onDestroy] both do.
+     */
+    private fun shutdownTunnel() {
+        tunnelJob?.cancel()
+        tunnelJob = null
         statsJob?.cancel()
-        pumpJob = null
         statsJob = null
+        configJob?.cancel()
+        configJob = null
+
+        if (XrayCore.isRunning) {
+            XrayCore.stop()
+        }
 
         runCatching { tunInterface?.close() }
+            .onFailure { Log.w(TAG, "closing the tun interface reported an error", it) }
         tunInterface = null
+
+        totals.value = VpnStats.Empty
         teardownForeground()
     }
 
-    private fun goForeground() {
-        // The two-argument form is deliberate: from API 34 the system reads the
-        // foregroundServiceType from the manifest declaration, and on 29–33 it
-        // is a no-op, so one call site stays correct on every supported release.
-        startForeground(VpnNotifications.ID, VpnNotifications.connected(this))
-    }
-
-    private fun teardownForeground() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
-    }
-
-    // ---- data plane --------------------------------------------------------
+    // ==================================================================
+    // Stats
+    // ==================================================================
 
     /**
-     * INTEGRATION POINT.
+     * Samples the core's own traffic counters once a second.
      *
-     * A production core replaces the body of this loop with the real packet
-     * pump: read frames from [descriptor] with `FileInputStream`, hand them to
-     * the core, and write what comes back with `FileOutputStream`. The loop must
-     * stay off the main thread and must stop promptly when the job is cancelled,
-     * otherwise a reconnect leaks a second pump on the same fd.
-     */
-    private fun startPumpLoop(descriptor: ParcelFileDescriptor) {
-        pumpJob = scope.launch {
-            if (descriptor.fileDescriptor == null) return@launch
-            // No forwarding in the skeleton: the fd is held open and the loop
-            // parks. Replace with the read/write pump described above.
-            while (isActive && tunInterface != null) {
-                delay(1_000)
-            }
-        }
-    }
-
-    /**
-     * Fills the Home-screen counters. In the skeleton the numbers are synthetic
-     * so the UI has something to animate; a real core reports them from its own
-     * accounting instead.
+     * `queryAllOutboundTrafficStats` returns and resets the counters, so each
+     * reading is a delta over the previous tick — exactly what a throughput
+     * figure is. The totals are accumulated here because the core forgets them.
      */
     private fun startStatsLoop() {
         statsJob = scope.launch {
             var downTotal = 0L
             var upTotal = 0L
-            var lastDown = 0L
-            var lastUp = 0L
             var tick = 0L
 
-            while (isActive && tunInterface != null) {
+            while (isActive && tunInterface != null && XrayCore.isRunning) {
                 delay(1_000)
                 tick++
 
-                val downRate = abs(Random.nextLong(180_000, 9_400_000))
-                val upRate = abs(Random.nextLong(40_000, 2_100_000))
-                downTotal += downRate
-                upTotal += upRate
-                lastDown = downRate
-                lastUp = upRate
+                val counters = XrayCore.drainTrafficCounters()
+                var downDelta = 0L
+                var upDelta = 0L
+                counters.forEach { (key, value) ->
+                    val (_, direction) = key
+                    when (direction) {
+                        "downlink" -> downDelta += value
+                        "uplink" -> upDelta += value
+                    }
+                }
 
-                val stats = VpnStats(
-                    downloadBytesPerSec = lastDown,
-                    uploadBytesPerSec = lastUp,
-                    totalDownloadBytes = downTotal,
-                    totalUploadBytes = upTotal,
-                    sessionSeconds = tick,
+                downTotal += downDelta
+                upTotal += upDelta
+
+                VpnConnectionManager.pushStats(
+                    VpnStats(
+                        downloadBytesPerSec = downDelta,
+                        uploadBytesPerSec = upDelta,
+                        totalDownloadBytes = downTotal,
+                        totalUploadBytes = upTotal,
+                        sessionSeconds = tick,
+                    ),
                 )
-                VpnConnectionManager.pushStats(stats)
             }
         }
     }
 
-    // ---- teardown ----------------------------------------------------------
+    // ==================================================================
+    // Foreground
+    // ==================================================================
+
+    private fun goForeground() {
+        // The two-argument form is deliberate: from API 34 the system reads the
+        // foregroundServiceType from the manifest declaration, and on 29–33 it is
+        // a no-op, so one call site stays correct on every supported release.
+        val notification = VpnNotifications.connected(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                VpnNotifications.ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(VpnNotifications.ID, notification)
+        }
+    }
+
+    private fun teardownForeground() {
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+    }
+
+    // ==================================================================
+    // Platform callbacks
+    // ==================================================================
 
     override fun onRevoke() {
         // Another VPN app took over, or the user revoked consent in Settings.
         Log.w(TAG, "onRevoke(): the system revoked our VPN consent")
-        shutdown()
+        shutdownTunnel()
         VpnConnectionManager.onDisconnected("VPN access was revoked by the system.")
+        stopSelf()
         super.onRevoke()
     }
 
     override fun onDestroy() {
-        shutdown()
+        shutdownTunnel()
         scope.cancel()
-        if (tunInterface == null) {
+        XrayCore.statusListener = null
+        if (!XrayCore.isRunning) {
             VpnConnectionManager.onDisconnected()
         }
         Log.i(TAG, "service destroyed")
@@ -237,18 +331,26 @@ class DarkVvpnService : VpnService() {
     companion object {
         private const val TAG = "DarkVvpnService"
         private const val SESSION_NAME = "DARK VVPN"
-        private const val MTU = 1500
 
         const val ACTION_START = "com.darkvvpn.app.action.START"
         const val ACTION_STOP = "com.darkvvpn.app.action.STOP"
         const val EXTRA_SERVER_ID = "extra_server_id"
         const val EXTRA_SERVER_NAME = "extra_server_name"
 
-        fun start(context: android.content.Context, serverId: String, serverName: String) {
+        /**
+         * The rendered Xray config travels in the intent rather than being rebuilt
+         * in the service: the service must not reach into repositories, and one
+         * builder call site means the config the UI previewed is the config that
+         * runs.
+         */
+        const val EXTRA_CONFIG = "extra_config"
+
+        fun start(context: Context, serverId: String, serverName: String, config: String) {
             val intent = Intent(context, DarkVvpnService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_SERVER_ID, serverId)
                 putExtra(EXTRA_SERVER_NAME, serverName)
+                putExtra(EXTRA_CONFIG, config)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -257,7 +359,7 @@ class DarkVvpnService : VpnService() {
             }
         }
 
-        fun stop(context: android.content.Context) {
+        fun stop(context: Context) {
             val intent = Intent(context, DarkVvpnService::class.java).apply {
                 action = ACTION_STOP
             }

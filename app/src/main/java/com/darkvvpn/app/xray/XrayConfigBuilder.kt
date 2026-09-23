@@ -29,10 +29,13 @@ import kotlinx.serialization.json.putJsonObject
  * a config field is added in exactly one place.
  *
  * ── What it produces ─────────────────────────────────────────────────────────
- * A full document, not just an outbound: a tun inbound, the protocol outbound
- * tagged `proxy`, plus `direct`/`block` outbounds and the routing rules that
- * wire them up. That is the smallest document Xray will actually run, so the
- * result can be handed straight to the core.
+ * A complete, runnable document: a `tun` inbound, the protocol outbound tagged
+ * `proxy`, plus `direct`/`block` outbounds and the routing rules that wire them
+ * up. The tun inbound is what makes the tunnel real — the app passes the open
+ * tun file descriptor to the core as a separate argument
+ * (`CoreController.startLoop(config, tunFd)`), and the core's own gVisor
+ * netstack then terminates the TCP/IP flows arriving on that interface. There is
+ * no separate tun2socks process.
  *
  * ── Deliberate omissions ─────────────────────────────────────────────────────
  * [VpnProtocol.HYSTERIA2] has no Xray outbound (it is QUIC-based and needs a
@@ -51,21 +54,31 @@ object XrayConfigBuilder {
     const val OUTBOUND_TAG_PROXY = "proxy"
     const val OUTBOUND_TAG_DIRECT = "direct"
     const val OUTBOUND_TAG_BLOCK = "block"
-    const val INBOUND_TAG_TUN = "tun-in"
+    const val INBOUND_TAG_TUN = "tun"
 
-    /** Address the device is given inside the tunnel. */
-    private const val TUN_ADDRESS = "10.8.0.2/32"
-    private const val SOCKS_INBOUND_PORT = 10808
+    /**
+     * Address handed to the device inside the tunnel, and the gateway the core's
+     * netstack answers on. They must be in the same prefix, which is why they are
+     * declared together rather than in two files: a mismatch here produces a
+     * tunnel that establishes and then silently drops every packet.
+     */
+    const val TUN_CLIENT_ADDRESS = "10.8.0.2"
+    const val TUN_GATEWAY = "10.8.0.1"
+    const val TUN_PREFIX_LENGTH = 30
+    const val TUN_MTU = 1500
+
+    /** Resolver the device is told to use; queries travel through the tunnel. */
+    val TUN_DNS_SERVERS = listOf("1.1.1.1", "1.0.0.1")
 
     /**
      * @param server the node to dial.
-     * @param localSocksPort the loopback SOCKS port the tun/pump forwards into.
      * @param blockAds add routing rules that blackhole known ad and tracker hosts.
+     * @param mtu tun MTU; 1500 unless the operator has a reason to lower it.
      */
     fun build(
         server: VpnServer,
-        localSocksPort: Int = SOCKS_INBOUND_PORT,
         blockAds: Boolean = true,
+        mtu: Int = TUN_MTU,
     ): XrayConfigResult {
         if (!server.protocol.isXrayNative) {
             return XrayConfigResult.UnsupportedProtocol(
@@ -83,18 +96,23 @@ object XrayConfigBuilder {
                 put("dnsLog", false)
             }
 
-            putJsonObject("dns") {
-                // Resolve through the tunnel-adjacent resolver, never the
-                // operator's clearnet DNS, so lookups cannot leak.
-                putJsonArray("servers") {
-                    add("1.1.1.1")
-                    add("1.0.0.1")
+            putJsonObject("policy") {
+                putJsonObject("levels") {
+                    putJsonObject("8") {
+                        put("handshake", 4)
+                        put("connIdle", 300)
+                        put("uplinkOnly", 1)
+                        put("downlinkOnly", 1)
+                    }
                 }
-                put("queryStrategy", "UseIPv4")
+                putJsonObject("system") {
+                    put("statsOutboundUplink", true)
+                    put("statsOutboundDownlink", true)
+                }
             }
 
             putJsonArray("inbounds") {
-                add(buildTunInbound(localSocksPort))
+                add(buildTunInbound(mtu))
             }
 
             putJsonArray("outbounds") {
@@ -106,37 +124,52 @@ object XrayConfigBuilder {
                 add(buildJsonObject {
                     put("tag", OUTBOUND_TAG_BLOCK)
                     put("protocol", "blackhole")
+                    putJsonObject("settings") {
+                        putJsonObject("response") { put("type", "http") }
+                    }
                 })
             }
 
             putJsonObject("routing") {
-                put("domainStrategy", "IPIfNonMatch")
+                put("domainStrategy", "AsIs")
                 putJsonArray("rules") {
-                    add(buildJsonObject {
-                        put("type", "field")
-                        put("outboundTag", OUTBOUND_TAG_PROXY)
-                        putJsonArray("network") { add("tcp,udp") }
-                    })
+                    // ORDER MATTERS: Xray stops at the first matching rule, so
+                    // every specific rule must precede the catch-all. Putting the
+                    // catch-all first would silently disable the ad blocker.
                     if (blockAds) {
                         add(buildJsonObject {
                             put("type", "field")
                             put("outboundTag", OUTBOUND_TAG_BLOCK)
                             putJsonArray("domain") {
                                 add("geosite:category-ads-all")
-                                add("geosite:category-ads")
                             }
                         })
                     }
+
+                    // Loopback and link-local traffic stays off the tunnel, so a
+                    // LAN device (a printer, a NAS) is still reachable.
                     add(buildJsonObject {
                         put("type", "field")
                         put("outboundTag", OUTBOUND_TAG_DIRECT)
-                        putJsonArray("domain") {
-                            add("geosite:private")
-                            add("geosite:cn")
+                        putJsonArray("ip") {
+                            add("geoip:private")
                         }
+                    })
+
+                    // Everything else goes through the node. This is the
+                    // catch-all and must stay last.
+                    add(buildJsonObject {
+                        put("type", "field")
+                        put("outboundTag", OUTBOUND_TAG_PROXY)
+                        putJsonArray("network") { add("tcp,udp") }
                     })
                 }
             }
+
+            // No `dns` section: DNS is the device's own resolver pointed at
+            // TUN_DNS_SERVERS, and those queries arrive at the netstack as
+            // ordinary UDP flows and travel through the node like any other
+            // traffic. Configuring Xray DNS here as well would hijack them.
         }
 
         return XrayConfigResult.Success(
@@ -202,15 +235,30 @@ object XrayConfigBuilder {
     // ------------------------------------------------------------------
     // Inbound
     // ------------------------------------------------------------------
-    private fun buildTunInbound(localSocksPort: Int): JsonObject = buildJsonObject {
+
+    /**
+     * The `tun` inbound.
+     *
+     * The file descriptor is **not** in here: the app opens the tun through
+     * `VpnService.Builder.establish()` and hands the descriptor to the core as
+     * the second argument of `startLoop`. What this section configures is the
+     * core's side of that interface.
+     *
+     * The field names follow Xray's `infra/conf/tun.go`
+     * (`name`, `mtu`, `gateway`, `userLevel`). `autoSystemRoutingTable` is
+     * deliberately absent — it rewrites the host routing table, which on Android
+     * is `VpnService`'s job and would fail without root.
+     */
+    private fun buildTunInbound(mtu: Int): JsonObject = buildJsonObject {
         put("tag", INBOUND_TAG_TUN)
-        put("protocol", "dokodemo-door")
-        put("listen", "127.0.0.1")
-        put("port", localSocksPort)
+        put("protocol", "tun")
         putJsonObject("settings") {
-            put("address", "127.0.0.1")
-            put("network", "tcp,udp")
-            put("followRedirect", true)
+            put("name", "xray0")
+            put("mtu", mtu)
+            put("userLevel", 8)
+            // Must fall inside the same prefix as the address Android is given,
+            // or the netstack has no reachable gateway and every flow stalls.
+            putJsonArray("gateway") { add(TUN_GATEWAY) }
         }
         putJsonObject("sniffing") {
             put("enabled", true)
@@ -219,11 +267,9 @@ object XrayConfigBuilder {
                 add("tls")
                 add("quic")
             }
+            // `routeOnly` is false, so domains sniffed here are also used for
+            // routing decisions — this is what makes `geosite:` rules work.
             put("routeOnly", false)
-        }
-        // The app's own tun address, so the core understands the tunnel subnet.
-        putJsonObject("streamSettings") {
-            put("network", "tcp")
         }
     }
 
@@ -324,7 +370,7 @@ object XrayConfigBuilder {
             putJsonObject("settings") {
                 put("secretKey", server.wgPrivateKey.orEmpty())
                 putJsonArray("address") {
-                    if (server.wgLocalAddress.isEmpty()) add(TUN_ADDRESS)
+                    if (server.wgLocalAddress.isEmpty()) add("$TUN_CLIENT_ADDRESS/$TUN_PREFIX_LENGTH")
                     else server.wgLocalAddress.forEach { add(it) }
                 }
                 server.wgMtu?.let { put("mtu", it) }
