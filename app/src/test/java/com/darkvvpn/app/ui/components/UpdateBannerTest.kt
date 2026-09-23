@@ -20,9 +20,24 @@ import org.robolectric.annotation.Config
  *
  * Robolectric composes Compose for real on the JVM, so this catches a missing
  * string resource, a broken colour reference, or a layout that throws.
+ *
+ * ── Why the Application is not DarkVvpnApplication ───────────────────────────
+ * With the real Application these tests were flaky: two of five failed with
+ * "Compose did not get idle after 8280866 attempts in 60 SECONDS" from inside
+ * `setContent`, while the other three in the same class passed. A plain `Text`
+ * cannot loop, so the churn was coming from the app's own singletons — the
+ * ViewModels and DataStore coroutines that DarkVvpnApplication's container
+ * starts, which keep invalidating the composition.
+ *
+ * None of that is under test here. A bare Application removes the interference
+ * and makes the class deterministic, which is what a render test has to be to be
+ * worth having.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE])
+@Config(
+    sdk = [android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE],
+    application = android.app.Application::class,
+)
 class UpdateBannerTest {
 
     @get:Rule

@@ -41,6 +41,7 @@ class RealSubscriptionShapeTest {
         vless://00000000-1111-2222-3333-444444444444@www.speedtest.net:8443?alpn=h2%2Chttp%2F1.1%2Ch3&encryption=none&fp=chrome&host=panel.example.invalid&path=%2F%40CHANNEL&security=tls&sni=panel.example.invalid&type=ws#%F0%9F%87%A9%F0%9F%87%AA%7CNode-1%7CTest
         vless://00000000-1111-2222-3333-444444444444@188.114.97.6:8443?alpn=h2%2Chttp%2F1.1%2Ch3&encryption=none&fp=chrome&host=panel.example.invalid&path=%2F%40CHANNEL&security=tls&sni=panel.example.invalid&type=ws#%F0%9F%87%A9%F0%9F%87%AA%7CNode-2%7CCDN
         vless://00000000-1111-2222-3333-444444444444@cdn1.example.invalid:8443?alpn=h2%2Chttp%2F1.1%2Ch3&encryption=none&fp=chrome&host=panel.example.invalid&path=%2F%40CHANNEL&security=tls&sni=panel.example.invalid&type=ws#%F0%9F%87%A9%F0%9F%87%AA%7CNode-3%7CCDN-1
+        vless://00000000-1111-2222-3333-444444444444@cdn2.example.invalid:8443?alpn=h2%2Chttp%2F1.1%2Ch3&encryption=none&fp=chrome&host=panel.example.invalid&path=%2F%40CHANNEL&security=tls&sni=panel.example.invalid&type=ws#%F0%9F%87%A9%F0%9F%87%AA%7CNode-4%7CCDN-2
         hysteria2://9e67dec29d0c46ec91abf0bec7175fd1@hy.example.invalid:17511?security=tls&sni=hy.example.invalid&alpn=h3#%F0%9F%8E%AE%7CNode-HY
         vless://00000000-1111-2222-3333-444444444444@1.2.3.4.5:1234?type=tcp&security=none#Update+your+subscription+daily
         """.trimIndent().toByteArray(),
