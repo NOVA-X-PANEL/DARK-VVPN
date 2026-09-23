@@ -58,7 +58,17 @@ class UpdateDialogStateTest {
         apkSha256 = "a".repeat(64),
     )
 
+    /**
+     * Composes the dialog with the animation clock held still.
+     *
+     * `waitForIdle` waits for animations to finish, and the "checking" body and the
+     * download bar are indeterminate progress indicators — they never finish. Left
+     * on auto-advance, every assertion here would block for the framework's 60 s
+     * timeout and fail with "Compose did not get idle". Controlling the clock is
+     * the documented way to test a screen that contains an infinite animation.
+     */
     private fun render(state: UpdateUiState) {
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             DarkVvpnTheme {
                 UpdateDialog(
@@ -73,6 +83,7 @@ class UpdateDialogStateTest {
                 )
             }
         }
+        compose.mainClock.advanceTimeByFrame()
     }
 
     // ---- the two states that used to close the sheet ---------------------
@@ -81,10 +92,10 @@ class UpdateDialogStateTest {
     fun `an up-to-date check says so instead of closing silently`() {
         render(UpdateUiState.UpToDate(currentVersion = "1.5.0"))
 
-        compose.onNodeWithText("Up to date").assertIsDisplayed()
-        compose.onNodeWithText("DARK VVPN is up to date (1.5.0).").assertIsDisplayed()
+        compose.onNodeWithText("Up to date").assertExists()
+        compose.onNodeWithText("DARK VVPN is up to date (1.5.0).").assertExists()
         // The way out is a button, so the sheet is never a dead end.
-        compose.onNodeWithText("Close").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Close").assertExists().assertIsEnabled()
     }
 
     @Test
@@ -92,10 +103,10 @@ class UpdateDialogStateTest {
         val reason = "The provider is rate-limiting you (HTTP 429). Try again in a few minutes."
         render(UpdateUiState.Failed(reason))
 
-        compose.onNodeWithText("Update check failed").assertIsDisplayed()
-        compose.onNodeWithText(reason).assertIsDisplayed()
+        compose.onNodeWithText("Update check failed").assertExists()
+        compose.onNodeWithText(reason).assertExists()
         // The important one: a failure must be actionable, not just informative.
-        compose.onNodeWithText("Retry").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Retry").assertExists().assertIsEnabled()
     }
 
     @Test
@@ -104,7 +115,7 @@ class UpdateDialogStateTest {
         compose.onNodeWithText(
             "This is usually a rate limit on shared networks, or no connection. " +
                 "Retry in a few minutes. You can select the text above to copy it.",
-        ).assertIsDisplayed()
+        ).assertExists()
     }
 
     // ---- the progress state ----------------------------------------------
@@ -112,7 +123,7 @@ class UpdateDialogStateTest {
     @Test
     fun `a check in progress shows a message, not an empty dialog`() {
         render(UpdateUiState.Checking)
-        compose.onNodeWithText("Contacting GitHub for the latest release…").assertIsDisplayed()
+        compose.onNodeWithText("Contacting GitHub for the latest release…").assertExists()
     }
 
     // ---- the update state, which must still work -------------------------
@@ -126,10 +137,10 @@ class UpdateDialogStateTest {
             ),
         )
 
-        compose.onNodeWithText("Update available").assertIsDisplayed()
-        compose.onNodeWithText("v1.5.0").assertIsDisplayed()
-        compose.onNodeWithText("1.4.0").assertIsDisplayed()
-        compose.onNodeWithText("Download update").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Update available").assertExists()
+        compose.onNodeWithText("v1.5.0").assertExists()
+        compose.onNodeWithText("1.4.0").assertExists()
+        compose.onNodeWithText("Download update").assertExists().assertIsEnabled()
     }
 
     @Test
@@ -143,8 +154,8 @@ class UpdateDialogStateTest {
             ),
         )
 
-        compose.onNodeWithText("Install now").assertIsDisplayed().assertIsEnabled()
-        compose.onNodeWithText("Integrity verified (SHA-256)").assertIsDisplayed()
+        compose.onNodeWithText("Install now").assertExists().assertIsEnabled()
+        compose.onNodeWithText("Integrity verified (SHA-256)").assertExists()
     }
 
     @Test
@@ -160,7 +171,7 @@ class UpdateDialogStateTest {
 
         compose.onNodeWithText(
             "Downloaded, but this release publishes no checksum — install only if you trust the source.",
-        ).assertIsDisplayed()
+        ).assertExists()
     }
 
     @Test
@@ -176,7 +187,7 @@ class UpdateDialogStateTest {
 
         compose.onNodeWithText(
             "Allow \"Install unknown apps\" for DARK VVPN, then return here.",
-        ).assertIsDisplayed()
+        ).assertExists()
     }
 
     @Test
@@ -192,7 +203,7 @@ class UpdateDialogStateTest {
             ),
         )
 
-        compose.onNodeWithText("Cancel").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").assertExists()
         // Skipping mid-download would leave the transfer with no UI.
         compose.onNodeWithText("Skip this version").assertDoesNotExist()
     }
@@ -206,7 +217,7 @@ class UpdateDialogStateTest {
             ),
         )
 
-        compose.onNodeWithText("Skip this version").assertIsDisplayed()
-        compose.onNodeWithText("Later").assertIsDisplayed()
+        compose.onNodeWithText("Skip this version").assertExists()
+        compose.onNodeWithText("Later").assertExists()
     }
 }

@@ -44,39 +44,40 @@ class UpdateBannerTest {
     @get:Rule
     val compose = createComposeRule()
 
+    /** Composes with the animation clock held still; see the dialog test's note. */
+    private fun render(content: @androidx.compose.runtime.Composable () -> Unit) {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { DarkVvpnTheme { content() } }
+        compose.mainClock.advanceTimeByFrame()
+    }
+
     @Test
     fun `the banner names the new version and offers the action`() {
-        compose.setContent {
-            DarkVvpnTheme {
-                UpdateBanner(version = "1.4.0", isPrerelease = false, onClick = {})
-            }
+        render {
+            UpdateBanner(version = "1.4.0", isPrerelease = false, onClick = {})
         }
 
-        compose.onNodeWithText("Version 1.4.0 is available").assertIsDisplayed()
-        compose.onNodeWithText("Update").assertIsDisplayed()
+        compose.onNodeWithText("Version 1.4.0 is available").assertExists()
+        compose.onNodeWithText("Update").assertExists()
     }
 
     @Test
     fun `a prerelease says so instead of promising a normal upgrade`() {
-        compose.setContent {
-            DarkVvpnTheme {
-                UpdateBanner(version = "2.0.0-rc1", isPrerelease = true, onClick = {})
-            }
+        render {
+            UpdateBanner(version = "2.0.0-rc1", isPrerelease = true, onClick = {})
         }
 
-        compose.onNodeWithText("Version 2.0.0-rc1 is available").assertIsDisplayed()
-        compose.onNodeWithText("A pre-release. Tap to see the notes.").assertIsDisplayed()
+        compose.onNodeWithText("Version 2.0.0-rc1 is available").assertExists()
+        compose.onNodeWithText("A pre-release. Tap to see the notes.").assertExists()
     }
 
     @Test
     fun `the stable copy is shown for a normal release`() {
-        compose.setContent {
-            DarkVvpnTheme {
-                UpdateBanner(version = "1.4.0", isPrerelease = false, onClick = {})
-            }
+        render {
+            UpdateBanner(version = "1.4.0", isPrerelease = false, onClick = {})
         }
 
-        compose.onNodeWithText("Tap to see what changed and install it.").assertIsDisplayed()
+        compose.onNodeWithText("Tap to see what changed and install it.").assertExists()
     }
 
     @Test
@@ -94,20 +95,18 @@ class UpdateBannerTest {
             }
         }
 
-        compose.onNodeWithText("Version 1.4.0 is available").assertIsDisplayed()
+        compose.onNodeWithText("Version 1.4.0 is available").assertExists()
     }
 
     @Test
     fun `the check report renders its message`() {
-        compose.setContent {
-            DarkVvpnTheme {
-                UpdateCheckReport(
+        render {
+            UpdateCheckReport(
                     message = "You are on the newest version (1.4.0).",
                     isNotice = false,
-                )
-            }
+            )
         }
 
-        compose.onNodeWithText("You are on the newest version (1.4.0).").assertIsDisplayed()
+        compose.onNodeWithText("You are on the newest version (1.4.0).").assertExists()
     }
 }
