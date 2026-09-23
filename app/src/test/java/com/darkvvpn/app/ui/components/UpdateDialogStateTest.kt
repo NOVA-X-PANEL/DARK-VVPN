@@ -33,6 +33,11 @@ import org.robolectric.annotation.Config
 @Config(
     sdk = [android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE],
     application = android.app.Application::class,
+    // Robolectric's default window is far smaller than any phone, and an
+    // AlertDialog with a release-notes body overflows it — so `assertIsDisplayed`
+    // failed for controls that are plainly visible on a real device. The
+    // qualifiers below are a 411x891dp phone, which is what the layout is for.
+    qualifiers = "w411dp-h891dp-xxhdpi",
 )
 class UpdateDialogStateTest {
 

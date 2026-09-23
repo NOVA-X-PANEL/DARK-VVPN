@@ -1,5 +1,6 @@
 package com.darkvvpn.app.ui.components
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -79,11 +80,21 @@ class UpdateBannerTest {
     }
 
     @Test
-    fun `the tab dot draws without crashing`() {
-        // The dot carries no text, so the assertion is simply that it composes and
-        // that its amber comes from a real colour reference.
-        compose.setContent { DarkVvpnTheme { UpdateDot() } }
-        compose.waitForIdle()
+    fun `the banner and the tab dot draw together`() {
+        // The dot carries no text, so it is exercised alongside the banner and the
+        // assertion lands on the banner. A test that only called `waitForIdle()`
+        // asserted nothing and failed intermittently for reasons outside the
+        // product, which makes it worse than no test.
+        compose.setContent {
+            DarkVvpnTheme {
+                Column {
+                    UpdateBanner(version = "1.4.0", isPrerelease = false, onClick = {})
+                    UpdateDot()
+                }
+            }
+        }
+
+        compose.onNodeWithText("Version 1.4.0 is available").assertIsDisplayed()
     }
 
     @Test
