@@ -127,11 +127,77 @@ that reads `APPLICATION_KEY` out of `CreationExtras`. Three objects and a factor
 each is not worth a DI framework; if the graph grows past roughly a dozen
 singletons, that trade-off flips and Hilt becomes the right answer.
 
+## Import and update paths
+
+Two pipelines sit on top of the state layer, and both are written so that
+third-party input cannot escalate.
+
+### Subscription → node → config
+
+```
+  URL ──HttpFetcher──► raw body ──SubscriptionParser──► [VpnServer] ──┐
+  share link ─────────────────────────────────────────────────────────┤
+  Clash YAML / sing-box JSON ─────────────────────────────────────────┤
+  built-in catalogue ─────────────────────────────────────────────────┘
+                                                                       │
+                                        XrayConfigBuilder ◄────────────┘
+                                                │
+                                     complete Xray document
+```
+
+Every input becomes a `VpnServer` before anything else looks at it, so the
+config builder is the only code that knows Xray's schema. `VpnProtocol` keeps
+`uriScheme` and `xrayProtocol` separate for exactly this reason: Shadowsocks is
+shared as `ss://` but must be emitted as `shadowsocks`, and conflating the two
+produces a config the core silently refuses.
+
+`HttpFetcher` refuses any scheme but `http`/`https` — including after a redirect,
+because a redirect can change the scheme — caps the body at 4 MB, and never logs
+the body, since a subscription URL usually carries an access token.
+
+`SubscriptionParser` records a per-line failure and continues. A single
+malformed node out of two hundred must not cost the user the other 199, so it
+never throws.
+
+### Update check → verified install
+
+```
+  GitHub Releases API (one hard-coded repo, HTTPS only)
+        │
+        ▼
+  UpdateChecker ──VersionComparator──► is this newer than installed?
+        │
+        ▼  yes, and it has an .apk asset
+  UpdateDownloader ── stream + SHA-256 over the bytes written ──┐
+        │                                                        │
+        │◄── mismatch? delete the file, report failure ──────────┘
+        ▼  digest matches (or absent → reported as unverified)
+  UpdateInstaller ──FileProvider content:// ──► package installer
+```
+
+The threat this closes: an app that installs an APK it downloaded is the highest
+-risk surface in the project, because a substituted APK is a full device
+compromise. Four things hold the line — the URL comes from the API response and
+is never user-supplied, the digest covers exactly the bytes written to disk,
+a mismatch deletes the file, and the file is written to a `.part` name and
+renamed only after the hash passes, so a truncated download can never be
+mistaken for a complete APK.
+
+`VersionComparator` is hand-written because the rules are narrow and worth
+stating: numeric identifiers compare numerically (`1.10.0 > 1.9.0`), a release
+outranks its own pre-release (`1.0.0 > 1.0.0-rc1`, so a user is never offered a
+downgrade), and a trailing number inside an alphanumeric identifier compares
+numerically (`rc10 > rc9`) — a deliberate deviation from semver's lexical rule,
+because the lexical order is the opposite of what a user reads.
+
 ## Testing strategy
 
-- **JVM unit tests** cover everything pure: formatting, redaction, the ping
-  quality buckets, protocol parsing. No Android framework, so they run in
-  milliseconds.
+- **JVM unit tests** cover everything pure: the Xray config builder (29 tests,
+  one per protocol/security/transport branch), the subscription parser (24, one
+  per input format), version comparison (15, one per semver rule that matters),
+  link decoding and geo naming. No Android framework, so they run in
+  milliseconds — which is why the parser and the config builder are kept free of
+  it.
 - **Instrumented tests** cover what only a device can answer: the packaged app
   identity, and (as the project grows) the consent flow and the service
   lifecycle.
