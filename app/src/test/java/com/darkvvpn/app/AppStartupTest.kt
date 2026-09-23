@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.test.core.app.ApplicationProvider
 import com.darkvvpn.app.data.model.VpnProtocol
 import com.darkvvpn.app.data.model.VpnServer
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -127,6 +128,46 @@ class AppStartupTest {
         // A refresh re-serves the same endpoint; the selection must not be lost.
         repository.replaceSubscriptionNodes(listOf(node.copy(name = "Renamed")))
         assertEquals(node.id, repository.selectedServerId.value)
+    }
+
+    @Test
+    fun `a known release is persisted so the badge can be drawn offline`() {
+        val app = RuntimeEnvironment.getApplication() as DarkVvpnApplication
+        val settings = app.container.settingsRepository
+
+        // What the update check does on a success, and what the badge reads back.
+        runBlocking {
+            settings.setKnownRelease(tag = "v9.9.9", version = "9.9.9", isPrerelease = false)
+        }
+
+        val stored = runBlocking { settings.settings.first() }
+        assertNotNull("the release must survive in storage", stored.knownReleaseVersion)
+        assertEquals("9.9.9", stored.knownReleaseVersion)
+        assertEquals("v9.9.9", stored.knownReleaseTag)
+
+        // A badge drawn from storage alone must light up for a newer release.
+        assertTrue(
+            com.darkvvpn.app.data.update.UpdateBadgePolicy.shouldShow(
+                knownVersion = stored.knownReleaseVersion,
+                installedVersion = BuildConfig.VERSION_NAME,
+                skippedTag = stored.skippedUpdateTag,
+            ),
+        )
+    }
+
+    @Test
+    fun `the known release only moves forward`() {
+        val app = RuntimeEnvironment.getApplication() as DarkVvpnApplication
+        val settings = app.container.settingsRepository
+
+        runBlocking {
+            settings.setKnownRelease("v5.0.0", "5.0.0", isPrerelease = false)
+            // A stale cache or a release deleted upstream must not make the badge
+            // disappear by lowering the stored version.
+            settings.setKnownRelease("v4.0.0", "4.0.0", isPrerelease = false)
+        }
+
+        assertEquals("5.0.0", runBlocking { settings.settings.first() }.knownReleaseVersion)
     }
 
     @Test

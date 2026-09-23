@@ -29,4 +29,15 @@ data class AppSettings(
     /** The release tag the user chose to skip, so the prompt is not repeated. */
     val skippedUpdateTag: String? = null,
     val lastUpdateCheckEpochMillis: Long? = null,
+
+    /**
+     * The newest release the app has seen — tag and version name.
+     *
+     * Persisted so the in-app badge can appear immediately on launch, with no
+     * network call and no wait. Without it, a user who is offline (which is the
+     * common case for a VPN user) never learns an update exists.
+     */
+    val knownReleaseTag: String? = null,
+    val knownReleaseVersion: String? = null,
+    val knownReleaseIsPrerelease: Boolean = false,
 )

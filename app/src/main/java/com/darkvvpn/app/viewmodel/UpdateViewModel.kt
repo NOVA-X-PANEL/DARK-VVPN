@@ -12,6 +12,7 @@ import com.darkvvpn.app.data.repository.SettingsRepository
 import com.darkvvpn.app.data.update.AppRelease
 import com.darkvvpn.app.data.update.DownloadResult
 import com.darkvvpn.app.data.update.DownloadState
+import com.darkvvpn.app.data.update.UpdateBadgePolicy
 import com.darkvvpn.app.data.update.UpdateCheckResult
 import com.darkvvpn.app.data.update.UpdateChecker
 import com.darkvvpn.app.data.update.UpdateDownloader
@@ -22,6 +23,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+
+/**
+ * The standing notice that a newer release exists.
+ *
+ * Separate from [UpdateUiState], which describes a dialog that is open right now.
+ * The badge outlives the dialog: dismissing the sheet, or never opening it, must
+ * not make the notice disappear — that is the whole point of a badge.
+ */
+data class UpdateBadge(
+    val tag: String,
+    val version: String,
+    val isPrerelease: Boolean,
+)
 
 /** What the update sheet is doing right now. */
 sealed interface UpdateUiState {
@@ -48,13 +62,25 @@ sealed interface UpdateUiState {
 }
 
 /**
- * Drives the in-app update flow: check, download, verify, install.
+ * Drives the in-app update flow: badge, check, download, verify, install.
  *
- * ── The launch-time check must be invisible ───────────────────────────────────
- * [checkOnLaunch] only opens the sheet when there is something to offer. A
- * network failure, a rate limit, or "no releases yet" all resolve to
- * [UpdateUiState.Hidden], because a failing update check is not something the
- * user asked about. A manual [check] always reports its outcome.
+ * ── The badge is the notification, the sheet is the action ───────────────────
+ * An update is announced by a small amber badge on the Settings tab and a banner
+ * at the top of Settings. The full sheet opens only when the user taps one of
+ * them. Nothing interrupts a launch with a modal, which is what the earlier
+ * design did and what made an update feel like an obstacle.
+ *
+ * ── Offline first ────────────────────────────────────────────────────────────
+ * The newest release the app has ever seen is persisted, so the badge is drawn
+ * from storage on the next launch with no network call and no delay. A VPN user
+ * is frequently offline by the time they see the launcher, and an update notice
+ * that needs connectivity to appear is a notice they never see.
+ *
+ * ── Failing quietly ──────────────────────────────────────────────────────────
+ * [checkOnLaunch] resolves every failure to "no change": a rate limit, a dead
+ * network, or "no releases yet" is not something the user asked about. [check]
+ * from the Settings screen always reports its outcome, because there the user did
+ * ask.
  */
 class UpdateViewModel(
     private val settingsRepository: SettingsRepository,
@@ -66,15 +92,36 @@ class UpdateViewModel(
     private val _state = MutableStateFlow<UpdateUiState>(UpdateUiState.Hidden)
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
+    private val _badge = MutableStateFlow<UpdateBadge?>(null)
+
+    /** The standing notice: non-null while a newer release is known about. */
+    val badge: StateFlow<UpdateBadge?> = _badge.asStateFlow()
+
+    private val _checkReport = MutableStateFlow<String?>(null)
+
+    /** One line of feedback for the manual check, shown under the Settings row. */
+    val checkReport: StateFlow<String?> = _checkReport.asStateFlow()
+
     val downloadState: StateFlow<DownloadState> = downloader.state
 
-    /** Set when the user presses "Later", so the sheet does not reopen this session. */
-    private var dismissedThisSession = false
+    /** The release the open sheet is about, kept so a re-tap does not re-fetch. */
+    private var lastKnownRelease: AppRelease? = null
+
+    private var settingsSnapshot: AppSettings = AppSettings()
 
     init {
-        // Mirror the downloader's progress into the sheet. The downloader owns
-        // the transfer; the ViewModel only relays its numbers, so there is one
-        // source of truth for how far along a download is.
+        // Draw the badge from storage before anything touches the network, so it
+        // is on screen the instant the app opens.
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                settingsSnapshot = settings
+                refreshBadgeFromSettings(settings)
+            }
+        }
+
+        // Mirror the downloader's progress into the sheet. The downloader owns the
+        // transfer; the ViewModel only relays its numbers, so there is one source
+        // of truth for how far along a download is.
         viewModelScope.launch {
             downloader.state.collect { progress ->
                 val current = _state.value as? UpdateUiState.Available ?: return@collect
@@ -102,12 +149,41 @@ class UpdateViewModel(
     }
 
     // ------------------------------------------------------------------
+    // Badge
+    // ------------------------------------------------------------------
+
+    /**
+     * Recomputes the badge from persisted state.
+     *
+     * Runs on every settings emission, which is also what makes the badge vanish
+     * by itself after an update is installed: the stored version no longer
+     * outranks [BuildConfig.VERSION_NAME], so the policy returns false and
+     * nothing has to clear it.
+     */
+    private fun refreshBadgeFromSettings(settings: AppSettings) {
+        val show = UpdateBadgePolicy.shouldShow(
+            knownVersion = settings.knownReleaseVersion,
+            installedVersion = BuildConfig.VERSION_NAME,
+            skippedTag = settings.skippedUpdateTag,
+        )
+        val version = settings.knownReleaseVersion
+        _badge.value = if (show && version != null) {
+            UpdateBadge(
+                tag = settings.knownReleaseTag ?: "v$version",
+                version = version,
+                isPrerelease = settings.knownReleaseIsPrerelease,
+            )
+        } else {
+            null
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Check
     // ------------------------------------------------------------------
 
     /** Silent check for the app start. Never surfaces a failure. */
     fun checkOnLaunch() {
-        if (dismissedThisSession) return
         viewModelScope.launch {
             val settings = settingsRepository.settings.first()
             if (!settings.checkForUpdatesOnLaunch) return@launch
@@ -122,13 +198,15 @@ class UpdateViewModel(
     /** Manual check from Settings. Always reports its outcome. */
     fun check() {
         viewModelScope.launch {
-            _state.value = UpdateUiState.Checking
-            runCheck(settingsRepository.settings.first(), silent = false)
+            _checkReport.value = null
+            runCheck(settingsSnapshot, silent = false)
         }
     }
 
     private suspend fun runCheck(settings: AppSettings, silent: Boolean) {
-        val result = withContextIo {
+        if (!silent) _state.value = UpdateUiState.Checking
+
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             checker.check(
                 allowPrerelease = settings.allowPrereleaseUpdates,
                 skippedTag = settings.skippedUpdateTag,
@@ -137,25 +215,82 @@ class UpdateViewModel(
 
         settingsRepository.setLastUpdateCheck(System.currentTimeMillis())
 
-        _state.value = when (result) {
+        when (result) {
             is UpdateCheckResult.UpdateAvailable -> {
-                val installed = installer.installedVersionName() ?: BuildConfig.VERSION_NAME
-                UpdateUiState.Available(
-                    release = result.release,
-                    installedVersion = installed,
-                    needsInstallPermission = !installer.canInstallPackages(),
+                lastKnownRelease = result.release
+                // Persist first: the badge is derived from settings, so writing the
+                // release is what makes it appear, and it stays correct offline.
+                settingsRepository.setKnownRelease(
+                    tag = result.release.tag,
+                    version = result.release.versionName,
+                    isPrerelease = result.release.isPrerelease,
                 )
+                val installed = installer.installedVersionName() ?: BuildConfig.VERSION_NAME
+
+                if (silent) {
+                    // Announce, do not interrupt. The badge and banner appear; the
+                    // sheet waits for a tap.
+                    _state.value = UpdateUiState.Hidden
+                } else {
+                    _state.value = UpdateUiState.Available(
+                        release = result.release,
+                        installedVersion = installed,
+                        needsInstallPermission = !installer.canInstallPackages(),
+                    )
+                }
             }
 
             is UpdateCheckResult.UpToDate -> {
-                if (silent) UpdateUiState.Hidden
-                else UpdateUiState.UpToDate(BuildConfig.VERSION_NAME)
+                _state.value = if (silent) UpdateUiState.Hidden else UpdateUiState.UpToDate(BuildConfig.VERSION_NAME)
+                if (!silent) {
+                    _checkReport.value = if (result.latestTag != null) {
+                        "You are on the newest version (${BuildConfig.VERSION_NAME})."
+                    } else {
+                        "No published release was found."
+                    }
+                }
             }
 
             is UpdateCheckResult.Failed -> {
-                if (silent) UpdateUiState.Hidden else UpdateUiState.Failed(result.reason)
+                _state.value = if (silent) UpdateUiState.Hidden else UpdateUiState.Failed(result.reason)
+                if (!silent) _checkReport.value = result.reason
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Sheet
+    // ------------------------------------------------------------------
+
+    /** Opens the sheet for the known release, reusing it if already fetched. */
+    fun openSheet() {
+        val badge = _badge.value ?: return
+        val cached = lastKnownRelease
+        val installed = installer.installedVersionName() ?: BuildConfig.VERSION_NAME
+
+        if (cached != null && cached.tag == badge.tag) {
+            _state.value = UpdateUiState.Available(
+                release = cached,
+                installedVersion = installed,
+                needsInstallPermission = !installer.canInstallPackages(),
+            )
+            return
+        }
+
+        // The badge came from storage and this process has not seen the release
+        // body yet, so fetch it before showing a sheet with empty notes.
+        viewModelScope.launch {
+            _state.value = UpdateUiState.Checking
+            runCheck(settingsSnapshot, silent = false)
+        }
+    }
+
+    fun closeSheet() {
+        val current = _state.value
+        // Keep an in-flight download: closing the sheet mid-transfer would leave a
+        // progress bar with nothing behind it.
+        if (current is UpdateUiState.Available && current.isDownloading) return
+        _state.value = UpdateUiState.Hidden
     }
 
     // ------------------------------------------------------------------
@@ -215,20 +350,16 @@ class UpdateViewModel(
     }
 
     // ------------------------------------------------------------------
-    // Dismiss
+    // Dismiss / skip
     // ------------------------------------------------------------------
 
-    fun dismiss() {
-        dismissedThisSession = true
-        _state.value = UpdateUiState.Hidden
-    }
-
-    /** Hides this specific release until a newer one appears. */
+    /** Hides this specific release, badge included, until a newer one appears. */
     fun skipThisVersion() {
-        val available = _state.value as? UpdateUiState.Available ?: return
-        viewModelScope.launch { settingsRepository.setSkippedUpdateTag(available.release.tag) }
-        dismissedThisSession = true
-        _state.value = UpdateUiState.Hidden
+        val tag = _badge.value?.tag ?: (lastKnownRelease?.tag ?: return)
+        viewModelScope.launch {
+            settingsRepository.setSkippedUpdateTag(tag)
+            _state.value = UpdateUiState.Hidden
+        }
     }
 
     fun clearSkip() {
@@ -242,15 +373,14 @@ class UpdateViewModel(
         }
     }
 
+    fun clearCheckReport() {
+        _checkReport.value = null
+    }
+
     fun consumeError() {
         val available = _state.value as? UpdateUiState.Available ?: return
         _state.value = available.copy(error = null)
     }
-
-    // ------------------------------------------------------------------
-
-    private suspend fun <T> withContextIo(block: () -> T): T =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { block() }
 
     companion object {
         /** Do not re-check more often than this from the launch-time hook. */

@@ -34,12 +34,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.darkvvpn.app.BuildConfig
 import com.darkvvpn.app.R
 import com.darkvvpn.app.ui.components.SectionHeader
+import com.darkvvpn.app.ui.components.UpdateBanner
+import com.darkvvpn.app.ui.components.UpdateCheckReport
 import com.darkvvpn.app.viewmodel.SettingsViewModel
+import com.darkvvpn.app.viewmodel.UpdateViewModel
 import com.darkvvpn.app.xray.XrayCore
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
+    // No default: a default would construct a second ViewModel instance for this
+    // screen, and then the banner's tap would set state the dialog never reads.
+    updateViewModel: UpdateViewModel,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showRefreshIntervalDialog by remember { mutableStateOf(false) }
@@ -49,6 +55,9 @@ fun SettingsScreen(
     val skippedTag = settings.skippedUpdateTag
 
     val coreStatus by viewModel.coreStatus.collectAsStateWithLifecycle()
+
+    val updateBadge by updateViewModel.badge.collectAsStateWithLifecycle()
+    val checkReport by updateViewModel.checkReport.collectAsStateWithLifecycle()
 
     // The core reports its version only once it has been initialised, which
     // happens on the first connect. Read it lazily rather than forcing init here.
@@ -68,6 +77,17 @@ fun SettingsScreen(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
+
+        // The standing update notice. Shown first because it is the only item on
+        // this screen the user has not chosen to look for.
+        updateBadge?.let { badge ->
+            Spacer(Modifier.height(16.dp))
+            UpdateBanner(
+                version = badge.version,
+                isPrerelease = badge.isPrerelease,
+                onClick = updateViewModel::openSheet,
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
 
@@ -157,6 +177,20 @@ fun SettingsScreen(
                 checked = settings.allowPrereleaseUpdates,
                 onCheckedChange = viewModel::setAllowPrereleaseUpdates,
             )
+            RowDivider()
+            ClickableRow(
+                title = stringResource(R.string.settings_update_check_now),
+                value = if (updateBadge != null) {
+                    stringResource(R.string.settings_update_available_short, updateBadge!!.version)
+                } else {
+                    stringResource(R.string.settings_update_check_action)
+                },
+                onClick = updateViewModel::check,
+            )
+            checkReport?.let { report ->
+                RowDivider()
+                UpdateCheckReport(message = report, isNotice = false)
+            }
             if (skippedTag != null) {
                 RowDivider()
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -168,7 +202,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    TextButton(onClick = viewModel::clearSkippedUpdate) {
+                    TextButton(onClick = updateViewModel::clearSkip) {
                         Text(stringResource(R.string.settings_update_unskip))
                     }
                 }

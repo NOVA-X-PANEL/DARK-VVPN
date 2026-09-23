@@ -11,10 +11,19 @@ import com.darkvvpn.app.ui.screens.ServersScreen
 import com.darkvvpn.app.ui.screens.SettingsScreen
 import com.darkvvpn.app.ui.screens.SplashScreen
 import com.darkvvpn.app.ui.screens.SubscriptionsScreen
+import com.darkvvpn.app.viewmodel.UpdateViewModel
 
+/**
+ * @param updateViewModel the single update ViewModel for the app. It is passed in
+ *   rather than created per screen because the badge, the Settings banner and the
+ *   dialog must all be looking at the *same* state: the banner's tap opens the
+ *   dialog, so a second instance would set a flag nobody reads and the tap would
+ *   appear to do nothing.
+ */
 @Composable
 fun DarkVvpnNavHost(
     navController: NavHostController,
+    updateViewModel: UpdateViewModel,
     startDestination: String = Routes.SPLASH,
 ) {
     NavHost(navController = navController, startDestination = startDestination) {
@@ -60,6 +69,6 @@ fun DarkVvpnNavHost(
             SubscriptionsScreen(prefillPayload = payload)
         }
 
-        composable(Routes.SETTINGS) { SettingsScreen() }
+        composable(Routes.SETTINGS) { SettingsScreen(updateViewModel = updateViewModel) }
     }
 }

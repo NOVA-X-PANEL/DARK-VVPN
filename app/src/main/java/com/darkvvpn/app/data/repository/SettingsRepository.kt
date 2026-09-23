@@ -42,6 +42,9 @@ class SettingsRepository(private val context: Context) {
         val UPDATE_PRERELEASE = booleanPreferencesKey("allow_prerelease_updates")
         val SKIPPED_UPDATE_TAG = stringPreferencesKey("skipped_update_tag")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
+        val KNOWN_RELEASE_TAG = stringPreferencesKey("known_release_tag")
+        val KNOWN_RELEASE_VERSION = stringPreferencesKey("known_release_version")
+        val KNOWN_RELEASE_PRERELEASE = booleanPreferencesKey("known_release_prerelease")
     }
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { prefs ->
@@ -62,6 +65,9 @@ class SettingsRepository(private val context: Context) {
             allowPrereleaseUpdates = prefs[Keys.UPDATE_PRERELEASE] ?: defaults.allowPrereleaseUpdates,
             skippedUpdateTag = prefs[Keys.SKIPPED_UPDATE_TAG],
             lastUpdateCheckEpochMillis = prefs[Keys.LAST_UPDATE_CHECK],
+            knownReleaseTag = prefs[Keys.KNOWN_RELEASE_TAG],
+            knownReleaseVersion = prefs[Keys.KNOWN_RELEASE_VERSION],
+            knownReleaseIsPrerelease = prefs[Keys.KNOWN_RELEASE_PRERELEASE] ?: false,
         )
     }
 
@@ -98,6 +104,28 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLastUpdateCheck(epochMillis: Long) {
         context.settingsStore.edit { it[Keys.LAST_UPDATE_CHECK] = epochMillis }
+    }
+
+    /**
+     * Records the newest release the app has seen, so the update badge can be
+     * drawn on the next launch before any network call completes.
+     *
+     * Only ever moves forward: a manual check that returns an older or equal tag
+     * (a stale cache, or a release deleted upstream) must not make the badge
+     * disappear.
+     */
+    suspend fun setKnownRelease(tag: String, version: String, isPrerelease: Boolean) {
+        context.settingsStore.edit { prefs ->
+            val current = prefs[Keys.KNOWN_RELEASE_VERSION]
+            if (current != null &&
+                com.darkvvpn.app.data.update.VersionComparator.compare(version, current) < 0
+            ) {
+                return@edit
+            }
+            prefs[Keys.KNOWN_RELEASE_TAG] = tag
+            prefs[Keys.KNOWN_RELEASE_VERSION] = version
+            prefs[Keys.KNOWN_RELEASE_PRERELEASE] = isPrerelease
+        }
     }
 
     suspend fun setSkippedUpdateTag(tag: String?) {

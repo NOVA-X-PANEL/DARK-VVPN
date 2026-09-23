@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -37,6 +38,7 @@ import androidx.navigation.compose.rememberNavController
 import com.darkvvpn.app.navigation.DarkVvpnNavHost
 import com.darkvvpn.app.navigation.Routes
 import com.darkvvpn.app.navigation.TopLevelDestination
+import com.darkvvpn.app.ui.components.UpdateDot
 import com.darkvvpn.app.ui.components.UpdateDialog
 import com.darkvvpn.app.ui.theme.DarkVvpnTheme
 import com.darkvvpn.app.util.NetworkState
@@ -108,6 +110,7 @@ private fun DarkVvpnApp(initialPayload: String?) {
 
     val updateViewModel: UpdateViewModel = viewModel(factory = UpdateViewModel.Factory)
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    val updateBadge by updateViewModel.badge.collectAsStateWithLifecycle()
 
     // The VPN ViewModel is read here only to run its launch-time auto-connect.
     val vpnViewModel: VpnViewModel = viewModel(factory = VpnViewModel.Factory)
@@ -135,6 +138,9 @@ private fun DarkVvpnApp(initialPayload: String?) {
 
     // Launch-time work, each gated on its own setting.
     LaunchedEffect(settings.autoConnectOnLaunch, settings.checkForUpdatesOnLaunch) {
+        // Quietly records the newest release. It deliberately does NOT open the
+        // sheet: the badge and the Settings banner announce the update, and the
+        // sheet opens when the user taps one of them.
         if (settings.checkForUpdatesOnLaunch) updateViewModel.checkOnLaunch()
         if (settings.autoConnectOnLaunch) vpnViewModel.connect(context)
     }
@@ -177,10 +183,19 @@ private fun DarkVvpnApp(initialPayload: String?) {
                                 }
                             },
                             icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = label,
-                                )
+                                if (destination == TopLevelDestination.SETTINGS && updateBadge != null) {
+                                    BadgedBox(badge = { UpdateDot() }) {
+                                        Icon(
+                                            imageVector = destination.icon,
+                                            contentDescription = label,
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = destination.icon,
+                                        contentDescription = label,
+                                    )
+                                }
                             },
                             label = { Text(label) },
                             colors = NavigationBarItemDefaults.colors(
@@ -201,6 +216,7 @@ private fun DarkVvpnApp(initialPayload: String?) {
         ) {
             DarkVvpnNavHost(
                 navController = navController,
+                updateViewModel = updateViewModel,
                 startDestination = Routes.SPLASH,
             )
         }
@@ -234,7 +250,7 @@ private fun DarkVvpnApp(initialPayload: String?) {
                 )
             },
             onSkip = updateViewModel::skipThisVersion,
-            onDismiss = updateViewModel::dismiss,
+            onDismiss = updateViewModel::closeSheet,
         )
 
         is UpdateUiState.UpToDate -> LaunchedEffect(state) {

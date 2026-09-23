@@ -54,6 +54,10 @@
     <string name="update_release_notes">Release notes</string>
     <string name="update_check_now">Check for updates</string>
     <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_banner_title">Version %1$s is available</string>
+    <string name="update_banner_body">Tap to see what changed and install it.</string>
+    <string name="update_banner_body_prerelease">A pre-release. Tap to see the notes.</string>
+    <string name="update_banner_action">Update</string>
 
     <!-- Settings: subscriptions & updates -->
     <string name="settings_subscriptions">Subscriptions</string>
@@ -65,6 +69,9 @@
     <string name="settings_update_on_launch">Check for updates on launch</string>
     <string name="settings_update_prerelease">Include pre-releases</string>
     <string name="settings_update_skipped">A skipped version is being hidden</string>
+    <string name="settings_update_check_now">Check for updates</string>
+    <string name="settings_update_check_action">Check now</string>
+    <string name="settings_update_available_short">%1$s ready</string>
     <string name="settings_update_unskip">Show skipped versions again</string>
 
     <!-- Protocol detail -->

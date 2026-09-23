@@ -23,6 +23,17 @@ val BrandTealDark = Color(0xFF009F7F)
 // Error
 val BrandRed = Color(0xFFFF5A6E)
 
+/**
+ * The "an update is ready" amber.
+ *
+ * Deliberately not the brand violet: violet is this app's colour for everything,
+ * so an update notice in violet reads as decoration. Amber is not used for any
+ * other state, which is what makes it scan as a notice at a glance.
+ */
+val BrandAmber = Color(0xFFFFC24B)
+val BrandAmberDeep = Color(0xFFE09B12)
+val InkOnAmber = Color(0xFF2A1D00)
+
 // Neutrals — the app's true canvas
 val Ink900 = Color(0xFF07070E)
 val Ink850 = Color(0xFF0B0B14)
