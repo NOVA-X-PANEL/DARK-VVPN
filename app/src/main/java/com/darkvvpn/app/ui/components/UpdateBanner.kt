@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.filled.SystemUpdateAlt
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -97,22 +94,30 @@ fun UpdateBanner(
 
         Spacer(Modifier.width(12.dp))
 
-        // A real Button, not amber text. As a label the action did not read as
-        // something to press, which is the other half of "the update control is
-        // not working": it was tappable, but it did not look it.
-        Button(
-            onClick = onClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = BrandAmber,
-                contentColor = InkOnAmber,
-            ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-            shape = RoundedCornerShape(50),
+        // A tinted chip, not a Material3 Button.
+        //
+        // The whole row is already clickable, so a nested Button would be a second
+        // tap target inside the first — an accessibility smell, and the reason the
+        // chip's own onClick is deliberately absent. It is drawn as a pill so it
+        // still reads as the thing to press, which is what the earlier plain amber
+        // `Text` failed to do.
+        //
+        // Material3's Button machinery is also what made the render tests hang:
+        // composing it here left Compose "not idle after 9,490,639 attempts",
+        // i.e. it never settled. Its ripple and interaction plumbing is more than
+        // a static label inside a row needs.
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(BrandAmber)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = stringResource(R.string.update_banner_action),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
+                color = InkOnAmber,
             )
         }
     }
