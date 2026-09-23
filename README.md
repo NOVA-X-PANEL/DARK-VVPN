@@ -26,9 +26,11 @@ DARK VVPN is a **production-shaped client shell**: every part of the app that is
 preference persistence, the `VpnService` lifecycle, the consent handshake and
 the foreground notification all work as they would in a shipped app.
 
-The tunnel data plane is deliberately left as a well-marked integration point so
-you can drop in the core you actually use — Xray, sing-box, WireGuard, or
-anything else — without rewriting the UI around it.
+Node import, subscription refresh and config generation are done: a link from
+any panel becomes an [`XrayConfigBuilder`](app/src/main/java/com/darkvvpn/app/xray/XrayConfigBuilder.kt)
+outbound. The tunnel **data plane** — the loop that pumps packets between the tun
+fd and the core — is deliberately left as a well-marked integration point so you
+can drop in the core you actually use without rewriting the UI around it.
 
 > **Status:** skeleton / reference implementation. It builds, runs and connects
 > to a tun interface, but it does not yet forward packets. See
@@ -39,14 +41,39 @@ anything else — without rewriting the UI around it.
 
 | | |
 |---|---|
+| **Every protocol** | VLESS, VMess, Trojan, Shadowsocks, WireGuard, SOCKS and HTTP, over TCP, WebSocket, gRPC, HTTP/2, HTTPUpgrade, SplitHTTP, XHTTP, QUIC and mKCP. |
+| **Every security layer** | TLS, REALITY (publicKey / shortId / spiderX) and XTLS, with uTLS fingerprints, SNI, ALPN and `xtls-rprx-vision` flow. |
+| **Subscription import** | Share links, base64 blobs, Clash YAML and sing-box JSON. A link can also be opened straight from another app. |
+| **Subscription auto-update** | A configurable refresh interval, Wi-Fi-only option, per-subscription toggles, quota bar and last-error reporting. |
+| **In-app updates** | Checks GitHub Releases, offers the new version, downloads it over HTTPS, **verifies the SHA-256** GitHub publishes, and hands it to the installer. |
 | **Dark-first design** | A hand-tuned violet-on-ink palette, not a recoloured light theme. Material 3 throughout. |
 | **One-tap connect** | An animated state-aware orb: pulsing ring while negotiating, green shield when up, red on failure. |
 | **Full `VpnService` lifecycle** | Consent via `VpnService.prepare()`, foreground service with a live notification, correct teardown on revoke. |
-| **Server catalogue** | Searchable, latency-sorted node list with per-node protocol and quality badges. |
 | **Live session counters** | Download / upload throughput and session duration on the home screen. |
-| **Persistent preferences** | Auto-connect, kill switch, ad blocking, sort order and theming, stored with Preferences DataStore. |
-| **Credential hygiene** | A `Redact` utility plus backup rules that keep tokens out of logs and out of cloud backups. |
-| **Tested** | JVM unit tests for the pure logic; an instrumented smoke test for the packaged app. |
+| **Credential hygiene** | A `Redact` helper, and backup rules that keep tokens out of logs and out of cloud backups. |
+| **Tested** | 109 JVM unit tests covering the config builder, the subscription parser, version comparison and decoding edge cases. |
+
+## Protocol and transport matrix
+
+| Protocol | Xray outbound | Share link | Notes |
+|---|---|---|---|
+| VLESS | ✅ | `vless://` | REALITY, XTLS, `xtls-rprx-vision` |
+| VMess | ✅ | `vmess://` | base64 JSON v2 and the legacy plain form |
+| Trojan | ✅ | `trojan://` | TLS by definition |
+| Shadowsocks | ✅ | `ss://` | SIP002 and the legacy whole-body base64 form |
+| WireGuard | ✅ | `wireguard://` | native Xray outbound; keys, MTU, allowed IPs |
+| SOCKS / HTTP | ✅ | `socks://`, `http://` | anonymous or user/pass |
+| Hysteria2 | ❌ | `hysteria2://`, `hy2://` | QUIC-based; **needs a sing-box class core**. Parsed and stored, but reported as unsupported rather than mis-compiled |
+
+Transport security: `none`, `tls`, `reality`, `xtls` · Transports: `tcp`, `raw`, `ws`,
+`grpc`, `http`, `httpupgrade`, `splithttp`, `xhttp`, `quic`, `kcp`
+
+A parsed node always becomes a `VpnServer`, and
+[`XrayConfigBuilder`](app/src/main/java/com/darkvvpn/app/xray/XrayConfigBuilder.kt)
+is the only place that knows Xray's schema — so a new input format never needs a
+new config path, and a missing required field is reported by name instead of
+surfacing as an opaque failure inside the core.
+
 
 ## Screens
 
@@ -129,16 +156,19 @@ DARK-VVPN/
 │       │   │   ├── DarkVvpnApplication.kt    # service locator (AppContainer)
 │       │   │   ├── MainActivity.kt           # edge-to-edge host + bottom nav
 │       │   │   ├── data/
-│       │   │   │   ├── model/                # VpnServer, VpnState, AppSettings…
-│       │   │   │   └── repository/           # ServerRepository, SettingsRepository
+│       │   │   │   ├── model/                # VpnServer, VpnProtocol, Subscription…
+│       │   │   │   ├── repository/           # ServerRepository, SettingsRepository
+│       │   │   │   ├── subscription/         # parser, fetcher, GeoNaming, store
+│       │   │   │   └── update/               # checker, downloader, installer, semver
 │       │   │   ├── navigation/               # routes + NavHost
 │       │   │   ├── ui/
-│       │   │   │   ├── components/           # ConnectionOrb, ServerRow, badges…
-│       │   │   │   ├── screens/              # Splash, Home, Servers, Settings
+│       │   │   │   ├── components/           # ConnectionOrb, ServerRow, UpdateDialog…
+│       │   │   │   ├── screens/              # Splash, Home, Servers, Subs, Settings
 │       │   │   │   └── theme/                # colour, type, MaterialTheme
-│       │   │   ├── util/                     # Formatters, Redact
-│       │   │   ├── viewmodel/                # three ViewModels + factories
-│       │   │   └── vpn/                      # DarkVvpnService, manager, notifications
+│       │   │   ├── util/                     # Formatters, Redact, NetworkState
+│       │   │   ├── viewmodel/                # four ViewModels + factories
+│       │   │   ├── vpn/                      # DarkVvpnService, manager, notifications
+│       │   │   └── xray/                     # XrayConfigBuilder
 │       │   └── res/                          # strings, themes, icons, backup rules
 │       ├── test/                             # JVM unit tests
 │       └── androidTest/                      # instrumented tests
@@ -164,15 +194,16 @@ tunnel core plugs in, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
    already off the main thread, cancellable and passed the open tun fd.
 2. Replace the synthetic numbers in `startStatsLoop()` with counters from the
    core's own accounting.
-3. Point `ServerRepository.seedCatalogue()` at your subscription parser instead
-   of the built-in list.
+3. Feed the config from `XrayConfigBuilder.build(server).rendered` into the core.
 4. Keep credentials out of plain `SharedPreferences`; use the Keystore-backed
    storage of your choice and log only through `Redact`.
 
 ## Roadmap
 
+- [x] Xray config generation for every protocol and transport
+- [x] Subscription import and scheduled refresh
+- [x] In-app update with SHA-256 verification
 - [ ] Real packet forwarding behind a pluggable core interface
-- [ ] Subscription import (`vless://`, `vmess://`, `trojan://`, base64 lists)
 - [ ] Per-app split tunnelling
 - [ ] Real latency probes instead of the simulated ones
 - [ ] Quick Settings tile and home-screen shortcuts
