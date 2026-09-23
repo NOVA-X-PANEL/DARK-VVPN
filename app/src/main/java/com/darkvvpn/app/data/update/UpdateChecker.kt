@@ -80,10 +80,12 @@ class UpdateChecker(
 
     /** Exposed for tests: parses a releases array body without any network. */
     fun parseReleases(body: String): List<AppRelease> {
-        val array = try {
-            json.parseToJsonElement(body) as? JsonArray
+        // Annotated so the type is `List<JsonElement>` rather than the union of
+        // the two branches, which the compiler widens to a nullable array.
+        val array: List<kotlinx.serialization.json.JsonElement> = try {
+            (json.parseToJsonElement(body) as? JsonArray) ?: emptyList()
         } catch (_: Throwable) {
-            return emptyList()
+            emptyList()
         }
         return array.mapNotNull { parseRelease(it as? JsonObject ?: return@mapNotNull null) }
     }

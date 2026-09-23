@@ -145,7 +145,9 @@ class SubscriptionsViewModel(
 
     fun onImportAutoUpdateChange(value: Boolean) = _import.update { it.copy(autoUpdate = value) }
 
-    fun clearImport() = _import.value = ImportState()
+    fun clearImport() {
+        _import.value = ImportState()
+    }
 
     /** Fetches without saving, so the user can see what they are about to add. */
     fun preview(url: String) {

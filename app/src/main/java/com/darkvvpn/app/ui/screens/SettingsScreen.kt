@@ -42,6 +42,10 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showRefreshIntervalDialog by remember { mutableStateOf(false) }
 
+    // `settings` comes from a delegated property, so a null-check on one of its
+    // fields cannot smart-cast inside a lambda. Capture it once instead.
+    val skippedTag = settings.skippedUpdateTag
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -145,13 +149,13 @@ fun SettingsScreen(
                 checked = settings.allowPrereleaseUpdates,
                 onCheckedChange = viewModel::setAllowPrereleaseUpdates,
             )
-            if (settings.skippedUpdateTag != null) {
+            if (skippedTag != null) {
                 RowDivider()
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text(
                         text = stringResource(
                             R.string.settings_update_skipped,
-                            settings.skippedUpdateTag,
+                            skippedTag,
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
