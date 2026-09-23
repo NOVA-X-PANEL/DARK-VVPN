@@ -256,6 +256,39 @@ downgrade), and a trailing number inside an alphanumeric identifier compares
 numerically (`rc10 > rc9`) — a deliberate deviation from semver's lexical rule,
 because the lexical order is the opposite of what a user reads.
 
+## Two ways a change can be invisible
+
+The v1.2.0 launch crash is worth recording, because it beat every check the
+project had: the build passed, 130 unit tests passed, and the APK was
+structurally valid and contained the right native libraries. The app still died
+the instant it opened.
+
+The cause was one resource: the splash screen passed `R.mipmap.ic_launcher` to
+Compose's `painterResource`. On API 26+ that id resolves to an
+`<adaptive-icon>`, and `painterResource` can rasterize only a `<vector>` or a
+bitmap. It threw during composition.
+
+Two properties made it invisible, and both are worth designing against:
+
+1. **A pure unit test never touches the resource system.** Every existing test
+   was logic; none of them loaded a drawable.
+2. **A structurally valid APK can still be broken.** Inspecting the archive
+   proves the pieces are present, not that they work together.
+
+The fix was a bitmap (`drawable-nodpi/splash_logo.png`), and the guard is
+Robolectric: `AppStartupTest` builds the real `Application` and launches the real
+`MainActivity`, so the splash screen is composed on the JVM. That test was
+verified to have teeth the honest way — the fix was reverted on a throwaway
+branch, the test failed with exactly the predicted stack trace
+(`PainterResources_androidKt.loadVectorResource` → `SplashScreen`), and the
+branch was deleted.
+
+`ComposeResourceSafetyTest` covers the same ground statically, so the rule is
+enforced rather than remembered. It checks the files AAPT compiles, not the
+framework: the first version asked `BitmapFactory.decodeResource` whether a
+drawable was rasterizable, and under Robolectric that call returns a synthetic
+bitmap for *every* id — the assertion could never fail.
+
 ## Testing strategy
 
 - **JVM unit tests** cover everything pure: the Xray config builder (29 tests,

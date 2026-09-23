@@ -45,6 +45,14 @@ Then:
 
 - Composables are **stateless**: take data in, emit events out. A composable that
   reads a repository directly is a bug.
+- **Never pass a `mipmap` to `painterResource`.** On API 26+ a launcher icon
+  resolves to an `<adaptive-icon>` XML, and `painterResource` can only rasterize
+  a `<vector>` or a real bitmap. It throws
+  `IllegalArgumentException: Only VectorDrawables and rasterized asset types are
+  supported` — during composition, so the app dies on launch. This is not
+  hypothetical: it is the v1.2.0 launch crash. Put UI images in
+  `res/drawable*/` as a PNG/WebP or a `<vector>`, and let
+  `ComposeResourceSafetyTest` keep you honest.
 - `Modifier` is the first optional parameter and must be threaded through, so
   callers can position the component.
 - Use `collectAsStateWithLifecycle()`, never `collectAsState()`, so collection
