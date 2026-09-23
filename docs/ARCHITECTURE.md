@@ -289,6 +289,55 @@ framework: the first version asked `BitmapFactory.decodeResource` whether a
 drawable was rasterizable, and under Robolectric that call returns a synthetic
 bitmap for *every* id — the assertion could never fail.
 
+## Why a subscription could import and still show nothing
+
+Three independent faults produced one symptom, which is why it took a report from
+a user to surface them: each is invisible from the others' vantage point.
+
+**The fetch read compressed bytes as text.** Many panels sit behind Cloudflare or
+nginx with gzip enabled, and `HttpURLConnection` does not decompress. The bytes
+were converted to a string, the parser found no links in the noise, and the
+message blamed the subscription. The fetcher now requests gzip, inflates it, and
+sniffs the gzip magic bytes as well — a server may compress without saying so.
+The body-size cap moved to *after* decompression, because a few kilobytes of gzip
+can expand without bound; capping the wire size would have been the wrong guard.
+
+**Fetched nodes were never persisted.** `load()` restored the subscription list
+and nothing else, and the refresh only ran when the interval had elapsed, from
+the Subscriptions screen. So a restart inside the window left an empty Servers
+list. Nodes are now cached to disk alongside the subscriptions and restored on
+launch, and the restore has somewhere to go: the ViewModel pushes them into the
+server repository, and that ViewModel is created at app launch rather than on
+first navigation to its tab.
+
+The cache carries a schema version. `VpnServer` persists enum names, so renaming
+`VpnSecurity.REALITY` would otherwise decode a stored node into one pointing at a
+different security layer — failing in a way that looks like a server fault. A
+version mismatch discards the cache instead of guessing.
+
+**An `http → https` redirect was not followed.**
+`HttpURLConnection.instanceFollowRedirects` does not follow a cross-protocol hop,
+and plenty of panels redirect exactly that way, so the body arrived as a 301 page.
+Redirects are now walked by hand, and the scheme is re-validated at every hop, so
+a redirect cannot reach `file:` or `content:`.
+
+### The message was hiding five problems
+
+"No usable nodes" was true in every one of those cases and useful in none of
+them. An HTML body is now classified as a document before parsing, and HTTP
+statuses are mapped to what the user can act on — 403 means the link expired, 404
+means a typo, 5xx means the provider is at fault. The classifier is a pure
+function ([ResponseClassifier]) so it is tested directly, rather than
+re-implemented in a test that would pass while the app did something else.
+
+### Why the app ships no nodes
+
+Earlier versions bundled demo entries on `*.invalid` hostnames. They could never
+resolve, so they only ever produced failures — and they made a working import
+look broken, because the list still showed unusable rows above the real ones. An
+app that starts empty and explains itself is more useful than one that starts
+full of things that cannot connect.
+
 ## Testing strategy
 
 - **JVM unit tests** cover everything pure: the Xray config builder (29 tests,
