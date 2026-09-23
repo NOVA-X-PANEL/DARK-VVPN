@@ -95,8 +95,8 @@ android {
         applicationId = "com.darkvvpn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -141,6 +141,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric runs the real Android resource system on the JVM, so a
+            // test can load a drawable exactly the way the app does — which is how
+            // the launch crash below is caught without a device.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     packaging {
@@ -192,6 +202,11 @@ dependencies {
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Robolectric lets the startup path be exercised on the JVM: the real
+    // Application, the real Activity, the real resources. The launch crash this
+    // guards against is invisible to a pure unit test.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

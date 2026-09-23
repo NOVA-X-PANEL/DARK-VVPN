@@ -72,8 +72,15 @@ fun SplashScreen(onFinished: () -> Unit) {
                 .scale(scale)
                 .alpha(alpha),
         ) {
+            // A plain bitmap drawable, NOT R.mipmap.ic_launcher. On API 26+ the
+            // launcher icon resolves to an <adaptive-icon> XML, which Compose's
+            // painterResource cannot rasterize — it throws
+            // "Only VectorDrawables and rasterized asset types are supported"
+            // and takes the app down on launch. Any drawable handed to Compose
+            // must be a VectorDrawable or a real bitmap; see
+            // ComposeResourceSafetyTest.
             Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
+                painter = painterResource(id = R.drawable.splash_logo),
                 contentDescription = null,
                 modifier = Modifier.size(140.dp),
             )

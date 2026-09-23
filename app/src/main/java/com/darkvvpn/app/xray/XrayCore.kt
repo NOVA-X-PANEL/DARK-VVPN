@@ -134,11 +134,19 @@ object XrayCore {
         }
     }
 
-    /** `Xray 25.x.x` — shown in Settings so the user knows what is dialling. */
+    /**
+     * `Xray 25.x.x` — shown in Settings so the user knows what is dialling.
+     *
+     * Touching `Libv2ray` loads the native library, which throws
+     * `UnsatisfiedLinkError` when the device's ABI is not one the core ships.
+     * That is a real possibility on an x86 phone, and it must not take the app
+     * down from a settings screen — so every failure becomes a string.
+     */
     fun version(): String = try {
         Libv2ray.checkVersionX()
     } catch (t: Throwable) {
-        "unknown"
+        Log.w(TAG, "core version unavailable: ${t.javaClass.simpleName}")
+        "unavailable"
     }
 
     /**
