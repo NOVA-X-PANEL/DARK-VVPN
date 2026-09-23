@@ -207,6 +207,11 @@ dependencies {
     // guards against is invisible to a pure unit test.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // Compose UI testing on the JVM. Robolectric renders for real, so this proves
+    // the update badge and banner actually draw — not merely that the state behind
+    // them is correct, which is the gap that let the splash crash ship.
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.androidx.ui.test.manifest)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
