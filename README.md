@@ -54,7 +54,7 @@ thousand, and why the app supports every protocol the core does.
 | **Every security layer** | TLS, REALITY (publicKey / shortId / spiderX) and XTLS, with uTLS fingerprints, SNI, ALPN and `xtls-rprx-vision` flow. |
 | **Subscription import** | Share links, base64 blobs, Clash YAML and sing-box JSON. A link can also be opened straight from another app. |
 | **Subscription auto-update** | A configurable refresh interval, Wi-Fi-only option, per-subscription toggles, quota bar and last-error reporting. |
-| **In-app updates** | Checks GitHub Releases, offers the new version, downloads it over HTTPS, **verifies the SHA-256** GitHub publishes, and hands it to the installer. |
+| **In-app updates** | An amber badge in Settings announces a new release — no pop-up. Tap it to download over HTTPS, **verify the SHA-256** GitHub publishes, and install. Works offline, because the newest release seen is saved on the device. |
 | **Dark-first design** | A hand-tuned violet-on-ink palette, not a recoloured light theme. Material 3 throughout. |
 | **One-tap connect** | An animated state-aware orb: pulsing ring while negotiating, green shield when up, red on failure. |
 | **Full `VpnService` lifecycle** | Consent via `VpnService.prepare()`, foreground service with a live notification, correct teardown on revoke. |
@@ -220,6 +220,22 @@ The app has no bundled servers, so the first step is always an import.
 Press **Retry** on the row, or the toolbar button, to re-fetch everything.
 **Settings → Diagnostics** shows the tunnel core's own messages for connection
 problems.
+
+## How updates announce themselves
+
+A new release shows up as a small **amber dot** on the Settings tab and an **amber
+banner** at the top of Settings. Tapping either opens the full sheet: version
+comparison, release notes, download, verified install.
+
+Nothing interrupts a launch. An update is information, not an obstacle.
+
+The newest release the app has seen is saved on the device, so the badge is drawn
+from storage the moment the app opens — no network call, no waiting. That matters
+because a VPN user is often offline by the time they look at the launcher, and a
+notice that needs connectivity to appear is a notice they never see.
+
+The badge clears itself once the installed version catches up, and skipping one
+release hides only that one: the next announcement shows again.
 
 ## How the tunnel fits together
 
