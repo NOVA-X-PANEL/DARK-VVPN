@@ -489,30 +489,30 @@ class HttpFetcher(
                 return@repeat
             }
             if (response.error != null || code == null) {
-                return HttpFetch(null, code, response.userInfo, response.error)
+                return HttpFetch(null, code, response.userInfoHeader, response.error)
             }
             if (code !in 200..299) {
-                return HttpFetch(null, code, response.userInfo, describeHttpFailure(code))
+                return HttpFetch(null, code, response.userInfoHeader, describeHttpFailure(code))
             }
 
             val raw = response.bytes
-                ?: return HttpFetch(null, code, response.userInfo, "The server returned an empty response.")
+                ?: return HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
 
             val text = decodeBody(raw, response.contentEncoding)
             if (text.isBlank()) {
-                return HttpFetch(null, code, response.userInfo, "The server returned an empty response.")
+                return HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
             }
             if (looksLikeMarkup(text)) {
                 // A web page where a node list was expected. Naming it is the
                 // difference between "your provider is down" and "no usable nodes".
                 return HttpFetch(
-                    null, code, response.userInfo,
+                    null, code, response.userInfoHeader,
                     "The server returned a web page instead of a node list — " +
                         "the URL is probably wrong, expired, or behind a login.",
                 )
             }
 
-            return HttpFetch(text, code, response.userInfo)
+            return HttpFetch(text, code, response.userInfoHeader)
         }
 
         return HttpFetch(null, null, null, "The subscription redirected too many times.")
@@ -583,11 +583,11 @@ class HttpFetcher(
             else -> null
         }
 
-        if (inflated != null) return inflated.toString(Charsets.UTF_8.name())
+        if (inflated != null) return inflated.toString(Charsets.UTF_8)
         if (encoding.isNotEmpty() && encoding != "identity") {
             Log.w(TAG, "unsupported content-encoding \"$encoding\"; reading raw bytes")
         }
-        return raw.toString(Charsets.UTF_8.name())
+        return raw.toString(Charsets.UTF_8)
     }
 
     private fun inflate(raw: ByteArray, wrap: (java.io.InputStream) -> java.io.InputStream): ByteArray? = try {

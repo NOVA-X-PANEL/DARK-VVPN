@@ -115,8 +115,9 @@ private fun DarkVvpnApp(initialPayload: String?) {
     // Instantiated at launch, not when the Subscriptions tab is first opened, so
     // the cached node list is restored into the catalogue before the user can
     // reach the Servers screen. Skipping this is what left an imported
-    // subscription showing an empty server list.
-    viewModel(factory = SubscriptionsViewModel.Factory)
+    // subscription showing an empty server list. The explicit type argument is
+    // what lets the result be discarded without a warning.
+    viewModel<SubscriptionsViewModel>(factory = SubscriptionsViewModel.Factory)
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
