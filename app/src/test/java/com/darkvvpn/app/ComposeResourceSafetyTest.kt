@@ -104,16 +104,19 @@ class ComposeResourceSafetyTest {
             .resolve("com/darkvvpn/app/ui/screens/SplashScreen.kt")
 
         assertTrue("SplashScreen.kt not found at $splash", splash.isFile)
-        val source = splash.readText().substringBeforeLast("}")
+        // Comments are stripped, because the comment explaining why a mipmap must
+        // not be used here contains the string "R.mipmap" — and an assertion that
+        // fires on its own documentation is worse than no assertion.
+        val code = stripComments(splash.readText())
 
         assertTrue(
             "the splash screen must load R.drawable.splash_logo",
-            source.contains("R.drawable.splash_logo"),
+            code.contains("R.drawable.splash_logo"),
         )
         assertFalse(
             "the splash screen must not touch R.mipmap: on API 26+ a mipmap is an " +
                 "<adaptive-icon>, which painterResource cannot rasterize",
-            source.contains("R.mipmap"),
+            code.contains("R.mipmap"),
         )
     }
 
@@ -127,9 +130,8 @@ class ComposeResourceSafetyTest {
         sourceRoot().walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
             .forEach { file ->
-                file.readLines().forEachIndexed { index, line ->
-                    val code = line.substringBefore("//")
-                    if (code.contains("painterResource") && code.contains("R.mipmap")) {
+                stripComments(file.readText()).lines().forEachIndexed { index, line ->
+                    if (line.contains("painterResource") && line.contains("R.mipmap")) {
                         offenders += "${file.name}:${index + 1}"
                     }
                 }
@@ -178,6 +180,17 @@ class ComposeResourceSafetyTest {
     private fun resourceDirs(prefix: String): List<File> =
         resRoot().listFiles().orEmpty()
             .filter { it.isDirectory && (it.name == prefix || it.name.startsWith("$prefix-")) }
+
+    /**
+     * Removes `/* … *\/` blocks and `//` line comments.
+     *
+     * The `//` rule skips a slash pair preceded by a colon, so a URL inside a
+     * string literal (`"https://…"`) is not mistaken for the start of a comment
+     * and does not silently truncate a line that a check needs to see.
+     */
+    private fun stripComments(text: String): String =
+        text.replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
+            .replace(Regex("(?<!:)//[^\\n]*"), "")
 
     /**
      * The root element's tag name, ignoring the XML declaration and comments.
