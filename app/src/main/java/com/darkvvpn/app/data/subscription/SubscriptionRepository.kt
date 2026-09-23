@@ -10,9 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 
 /**
  * A subscription as it is persisted. Kept separate from the domain model so the
@@ -37,6 +40,23 @@ data class StoredSubscription(
     val expiresAtEpochMillis: Long? = null,
 )
 
+/**
+ * The cached node list, stored as one blob.
+ *
+ * It carries a schema version because [VpnServer] persists enum names: if a
+ * future change renames one, old data must be discarded rather than decoded into
+ * a node pointing at the wrong security layer or transport.
+ */
+@Serializable
+data class StoredNodes(
+    val schemaVersion: Int = CURRENT_SCHEMA_VERSION,
+    val bySubscription: Map<String, List<VpnServer>> = emptyMap(),
+) {
+    companion object {
+        const val CURRENT_SCHEMA_VERSION = 1
+    }
+}
+
 /** What a refresh attempt produced, so the UI can report it without guessing. */
 sealed interface RefreshOutcome {
     data class Success(val serverCount: Int, val format: SubscriptionFormat) : RefreshOutcome
@@ -46,12 +66,18 @@ sealed interface RefreshOutcome {
 /**
  * Fetches and caches subscription node lists.
  *
+ * ── Node persistence ─────────────────────────────────────────────────────────
+ * Fetched nodes are written to disk and restored on the next launch. Without
+ * that, a subscription whose last refresh was minutes ago would show an empty
+ * node list after a restart, because nothing repopulates it until the refresh
+ * interval elapses — which reads to the user as "my subscription imported but
+ * the configs never appeared".
+ *
  * ── Node merging ─────────────────────────────────────────────────────────────
  * A refresh replaces the nodes that belong to *this* subscription and leaves
- * every manual entry and every other subscription's nodes alone. Nodes are
- * matched on [VpnServer.nodeKey] (protocol + host + port), so a provider that
- * renames a node or moves it to a different host produces a replaced entry
- * rather than a duplicate.
+ * manual entries and other subscriptions alone. Nodes are matched on
+ * [VpnServer.nodeKey] (protocol + host + port), so a provider that moves a node
+ * to a different host produces a replaced entry rather than a duplicate.
  *
  * ── Threading ────────────────────────────────────────────────────────────────
  * Every network call is blocking and must be invoked from a background
@@ -62,6 +88,7 @@ class SubscriptionRepository(
     private val parser: SubscriptionParser = SubscriptionParser(),
     private val store: SubscriptionStore,
     private val http: HttpFetcher = HttpFetcher(),
+    private val nodesCodec: NodesCodec = NodesCodec(),
 ) {
 
     private val _subscriptions = MutableStateFlow<List<Subscription>>(emptyList())
@@ -71,12 +98,23 @@ class SubscriptionRepository(
     private val _nodesBySubscription = MutableStateFlow<Map<String, List<VpnServer>>>(emptyMap())
     val nodesBySubscription: StateFlow<Map<String, List<VpnServer>>> = _nodesBySubscription.asStateFlow()
 
-    /** Loads persisted subscriptions. Call once at startup. */
+    /**
+     * Loads persisted subscriptions **and their cached nodes**. Call once at
+     * startup, before anything reads [allNodes].
+     *
+     * A cached node list is restored only for subscriptions that still exist, so
+     * removing a subscription and restarting does not resurrect its nodes.
+     */
     suspend fun load() {
         val stored = store.read()
         _subscriptions.value = stored.map { it.toDomain() }
-        // Nodes are not persisted: they are re-fetched, which keeps a stale node
-        // list from surviving a quota reset or an expired account.
+
+        val liveIds = _subscriptions.value.map { it.id }.toSet()
+        val cached = nodesCodec.decode(store.readNodesRaw())
+            .filterKeys { it in liveIds }
+        _nodesBySubscription.value = cached
+
+        Log.i(TAG, "loaded ${_subscriptions.value.size} subscription(s), ${cached.values.sumOf { it.size }} cached nodes")
     }
 
     suspend fun add(name: String, url: String, autoUpdate: Boolean = true): Subscription {
@@ -92,6 +130,7 @@ class SubscriptionRepository(
     suspend fun remove(subscriptionId: String) {
         mutate { list -> list.filterNot { it.id == subscriptionId } }
         _nodesBySubscription.update { it - subscriptionId }
+        persistNodes()
     }
 
     suspend fun update(subscription: Subscription) {
@@ -117,7 +156,7 @@ class SubscriptionRepository(
         val fetch = http.get(subscription.url, userAgent)
 
         if (fetch.error != null) {
-            recordFailure(subscriptionId, fetch.error)
+            recordFailure(subscriptionId, fetch.error, fetch.httpCode)
             return RefreshOutcome.Failure(fetch.error, fetch.httpCode)
         }
 
@@ -129,10 +168,11 @@ class SubscriptionRepository(
             return RefreshOutcome.Failure(reason, fetch.httpCode)
         }
 
-        // Tag every node with its origin so a later refresh can replace exactly
+        // Tag every node with its origin so a later refresh replaces exactly
         // these and nothing else.
         val tagged = parsed.servers.map { it.copy(subscriptionId = subscriptionId) }
         _nodesBySubscription.update { it + (subscriptionId to tagged) }
+        persistNodes()
 
         val traffic = parsed.traffic
         mutate { list ->
@@ -163,22 +203,35 @@ class SubscriptionRepository(
         return targets.map { it.id to refresh(it.id, userAgent) }
     }
 
+    /** Refreshes every enabled subscription, ignoring the auto-update flag. */
+    suspend fun refreshAll(userAgent: String): List<Pair<String, RefreshOutcome>> {
+        val targets = _subscriptions.value.filter { it.enabled }
+        return targets.map { it.id to refresh(it.id, userAgent) }
+    }
+
     /**
-     * True when a scheduled refresh is due: at least one enabled, auto-updating
-     * subscription has never been fetched, is in error, or was last fetched more
-     * than [refreshHours] ago.
+     * True when a refresh is worth doing on launch: at least one enabled,
+     * auto-updating subscription has never been fetched, is in error, has no
+     * cached nodes, or is past the interval.
      */
     fun isRefreshDue(refreshHours: Int, nowMillis: Long = System.currentTimeMillis()): Boolean {
-        if (refreshHours <= 0) return false
-        val interval = refreshHours * 60L * 60L * 1000L
+        val interval = refreshHours.coerceAtLeast(1) * 60L * 60L * 1000L
         return _subscriptions.value.any { subscription ->
             if (!subscription.enabled || !subscription.autoUpdate) return@any false
+            // No cached nodes means the user has nothing to connect to, whatever
+            // the clock says. This is the case that made a fresh import look broken.
+            if (_nodesBySubscription.value[subscription.id].isNullOrEmpty()) return@any true
+            if (subscription.hasError) return@any true
             val last = subscription.lastUpdatedEpochMillis ?: return@any true
-            subscription.hasError || (nowMillis - last) >= interval
+            (nowMillis - last) >= interval
         }
     }
 
-    /** All nodes from every subscription, newest subscription last. */
+    /** True when at least one enabled subscription has no nodes cached. */
+    fun hasSubscriptionsWithoutNodes(): Boolean =
+        _subscriptions.value.any { it.enabled && _nodesBySubscription.value[it.id].isNullOrEmpty() }
+
+    /** All nodes from every enabled subscription, in subscription order. */
     fun allNodes(): List<VpnServer> =
         _subscriptions.value
             .filter { it.enabled }
@@ -197,13 +250,18 @@ class SubscriptionRepository(
     ): Triple<List<VpnServer>, String?, String?> {
         val fetch = http.get(url, userAgent)
         if (fetch.error != null) {
-            return Triple(emptyList(), null, fetch.error)
+            val detail = fetch.httpCode?.let { " (HTTP $it)" }.orEmpty()
+            return Triple(emptyList(), null, fetch.error + detail)
         }
         val parsed = parser.parse(fetch.body.orEmpty(), fetch.userInfoHeader)
         return Triple(parsed.servers, parsed.format.label, parsed.error)
     }
 
     // ------------------------------------------------------------------
+    private suspend fun persistNodes() {
+        store.writeNodesRaw(nodesCodec.encode(_nodesBySubscription.value))
+    }
+
     private suspend fun recordFailure(subscriptionId: String, reason: String, httpCode: Int? = null) {
         val message = if (httpCode != null) "$reason (HTTP $httpCode)" else reason
         mutate { list ->
@@ -263,10 +321,98 @@ class SubscriptionRepository(
     }
 }
 
-/** Where the subscription list is persisted. Implemented on DataStore. */
+/** Serialises the cached node map, and refuses data from an incompatible schema. */
+class NodesCodec(
+    private val json: kotlinx.serialization.json.Json = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    },
+) {
+    fun encode(bySubscription: Map<String, List<VpnServer>>): String =
+        json.encodeToString(
+            StoredNodes.serializer(),
+            StoredNodes(bySubscription = bySubscription),
+        )
+
+    /**
+     * Returns an empty map for absent, unparseable, or schema-mismatched data.
+     *
+     * Discarding rather than guessing is deliberate: a node restored with the
+     * wrong security layer would fail to connect in a way that looks like a
+     * server problem, which is far harder to diagnose than an empty list the user
+     * knows to refresh.
+     */
+    fun decode(raw: String?): Map<String, List<VpnServer>> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return try {
+            val stored = json.decodeFromString(StoredNodes.serializer(), raw)
+            if (stored.schemaVersion != StoredNodes.CURRENT_SCHEMA_VERSION) {
+                Log.w("NodesCodec", "cached nodes are schema ${stored.schemaVersion}, discarding")
+                emptyMap()
+            } else {
+                stored.bySubscription
+            }
+        } catch (t: Throwable) {
+            Log.w("NodesCodec", "cached nodes could not be read, discarding")
+            emptyMap()
+        }
+    }
+}
+
+/** Where the subscription list and its cached nodes are persisted. */
 interface SubscriptionStore {
     suspend fun read(): List<StoredSubscription>
     suspend fun write(subscriptions: List<StoredSubscription>)
+    suspend fun readNodesRaw(): String?
+    suspend fun writeNodesRaw(payload: String)
+}
+
+/**
+ * Pure classification helpers used by [HttpFetcher].
+ *
+ * Kept separate from the fetcher so they are unit-testable: a unit test cannot
+ * open a socket to a controlled server, but it can call these directly. Testing
+ * the real functions beats re-implementing their logic in the test, which would
+ * pass while the product did something different.
+ */
+internal object ResponseClassifier {
+
+    /**
+     * True when the payload is a document rather than a node list.
+     *
+     * A login page or a 404 body parses into zero nodes, so without this the user
+     * is told their subscription "contains no usable nodes" when the truth is
+     * that the URL expired or is behind auth.
+     */
+    fun looksLikeMarkup(text: String): Boolean {
+        val head = text.trimStart().take(64).lowercase()
+        return head.startsWith("<!doctype") ||
+            head.startsWith("<html") ||
+            head.startsWith("<?xml") ||
+            (head.startsWith("<") && head.contains("html"))
+    }
+
+    /** Turns an HTTP status into something the user can act on. */
+    fun describeHttpFailure(code: Int): String = when (code) {
+        401, 403 ->
+            "The subscription was refused (HTTP $code). The link may have expired, or your provider blocks this app."
+        404 ->
+            "The subscription was not found (HTTP 404). Check the URL for a typo or a truncated token."
+        429 ->
+            "The provider is rate-limiting you (HTTP 429). Try again in a few minutes."
+        in 500..599 ->
+            "The provider's server is failing (HTTP $code). This is on their side, not yours."
+        else ->
+            "The server returned an error (HTTP $code)."
+    }
+
+    /** Only http and https are ever dialled, at every redirect hop. */
+    fun isAllowedScheme(scheme: String?): Boolean =
+        scheme?.lowercase() in setOf("http", "https")
+
+    /** The gzip magic bytes, for servers that compress without saying so. */
+    fun isGzip(raw: ByteArray): Boolean =
+        raw.size >= 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte()
 }
 
 /** Result of one HTTP GET. */
@@ -280,91 +426,221 @@ data class HttpFetch(
 /**
  * Fetches a subscription URL.
  *
- * SECURITY NOTES
- *  - Only `http`/`https` are dialled; anything else (including `file:` and
- *    `content:`) is refused, so a pasted URL cannot read local files.
- *  - Redirects are followed by [HttpURLConnection] but the *final* protocol is
- *    re-checked, because a redirect can change the scheme.
- *  - The response body is capped by [MAX_BODY_BYTES]; a hostile or broken server
- *    must not be able to exhaust memory by streaming forever.
- *  - The body is never logged; only its size and HTTP code are.
+ * ── Three bugs this class exists to avoid ────────────────────────────────────
+ *
+ * 1. **Compressed responses.** Many panels sit behind Cloudflare or nginx with
+ *    gzip on, and `HttpURLConnection` does *not* decompress for you. Reading the
+ *    raw stream and calling it a string yields binary noise, the parser finds no
+ *    links, and the user is told their subscription has no nodes. This class asks
+ *    for gzip and inflates it, and also sniffs the gzip magic bytes in case a
+ *    server compresses without saying so.
+ *
+ * 2. **Cross-protocol redirects.** `HttpURLConnection.instanceFollowRedirects`
+ *    does not follow an `http → https` hop. Plenty of panels redirect exactly
+ *    that way, so the body arrives as a 301 page. Redirects are therefore walked
+ *    by hand, with the scheme re-validated at every hop.
+ *
+ * 3. **Error pages presented as node lists.** A login page or a 404 body is valid
+ *    HTML and parses into zero nodes, producing "no usable nodes" for what is
+ *    really an authentication or URL problem. The body is now classified first,
+ *    so the message names the actual situation.
+ *
+ * ── Security notes ───────────────────────────────────────────────────────────
+ *  - Only `http`/`https` are dialled, at every hop, so a redirect cannot reach
+ *    `file:` or `content:`.
+ *  - The decompressed size is capped, not just the wire size: a small gzip bomb
+ *    would otherwise expand without bound.
+ *  - The body is never logged or echoed into an error message; a subscription URL
+ *    usually carries an access token in it, and so does the payload.
  */
 class HttpFetcher(
     private val connectTimeoutMillis: Int = 15_000,
     private val readTimeoutMillis: Int = 20_000,
 ) {
     fun get(url: String, userAgent: String): HttpFetch {
-        val parsed = try {
-            URL(url)
-        } catch (_: Exception) {
-            return HttpFetch(null, null, null, "That is not a valid URL.")
+        var current = url.trim()
+
+        repeat(MAX_REDIRECTS + 1) { hop ->
+            val parsed = try {
+                URL(current)
+            } catch (_: Exception) {
+                return HttpFetch(null, null, null, "That is not a valid URL.")
+            }
+
+            if (!isAllowedScheme(parsed.protocol)) {
+                return HttpFetch(
+                    null, null, null,
+                    if (hop == 0) {
+                        "Only http:// and https:// subscription URLs are allowed."
+                    } else {
+                        "The subscription redirected to a disallowed address."
+                    },
+                )
+            }
+
+            val response = requestOnce(parsed, userAgent)
+            val code = response.httpCode
+            if (code != null && code in 300..399 && response.location != null) {
+                current = runCatching {
+                    URL(parsed, response.location).toString()
+                }.getOrElse {
+                    return HttpFetch(null, code, null, "The subscription redirected to an invalid address.")
+                }
+                return@repeat
+            }
+            if (response.error != null || code == null) {
+                return HttpFetch(null, code, response.userInfo, response.error)
+            }
+            if (code !in 200..299) {
+                return HttpFetch(null, code, response.userInfo, describeHttpFailure(code))
+            }
+
+            val raw = response.bytes
+                ?: return HttpFetch(null, code, response.userInfo, "The server returned an empty response.")
+
+            val text = decodeBody(raw, response.contentEncoding)
+            if (text.isBlank()) {
+                return HttpFetch(null, code, response.userInfo, "The server returned an empty response.")
+            }
+            if (looksLikeMarkup(text)) {
+                // A web page where a node list was expected. Naming it is the
+                // difference between "your provider is down" and "no usable nodes".
+                return HttpFetch(
+                    null, code, response.userInfo,
+                    "The server returned a web page instead of a node list — " +
+                        "the URL is probably wrong, expired, or behind a login.",
+                )
+            }
+
+            return HttpFetch(text, code, response.userInfo)
         }
 
-        if (!isAllowedScheme(parsed.protocol)) {
-            return HttpFetch(null, null, null, "Only http:// and https:// subscription URLs are allowed.")
-        }
+        return HttpFetch(null, null, null, "The subscription redirected too many times.")
+    }
 
+    // ------------------------------------------------------------------
+
+    private fun requestOnce(parsed: URL, userAgent: String): RawResponse {
         var connection: HttpURLConnection? = null
         return try {
             connection = (parsed.openConnection() as? HttpURLConnection)
-                ?: return HttpFetch(null, null, null, "That URL cannot be fetched.")
+                ?: return RawResponse(error = "That URL cannot be fetched.")
 
-            connection.instanceFollowRedirects = true
             connection.connectTimeout = connectTimeoutMillis
             connection.readTimeout = readTimeoutMillis
             connection.requestMethod = "GET"
+            // Redirects are walked by hand so the scheme is re-validated at each
+            // hop and an http→https upgrade actually lands.
+            connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", userAgent)
             connection.setRequestProperty("Accept", "*/*")
+            connection.setRequestProperty("Accept-Encoding", "gzip")
 
             val code = connection.responseCode
-            // Re-check after redirects: the final URL decides, not the one asked for.
-            if (connection.url != null && !isAllowedScheme(connection.url.protocol)) {
-                return HttpFetch(null, code, null, "The subscription redirected to a disallowed scheme.")
-            }
-
             val userInfo = connection.getHeaderField("subscription-userinfo")
                 ?: connection.getHeaderField("Subscription-Userinfo")
 
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                return RawResponse(httpCode = code, userInfoHeader = userInfo, location = location)
+            }
             if (code !in 200..299) {
-                return HttpFetch(null, code, userInfo, "The server returned an error.")
+                return RawResponse(httpCode = code, userInfoHeader = userInfo)
             }
 
-            val stream = connection.inputStream ?: return HttpFetch(null, code, userInfo, "The server returned no body.")
-            val body = stream.use { readCapped(it) }
-            HttpFetch(body, code, userInfo)
+            val stream = connection.inputStream
+                ?: return RawResponse(httpCode = code, userInfoHeader = userInfo, error = "The server returned no body.")
+            val bytes = stream.use { readCapped(it) }
+            RawResponse(
+                httpCode = code,
+                userInfoHeader = userInfo,
+                bytes = bytes,
+                contentEncoding = connection.contentEncoding,
+            )
         } catch (e: IOException) {
-            HttpFetch(null, null, null, "Could not reach the subscription: ${e.javaClass.simpleName}")
+            RawResponse(error = "Could not reach the subscription (${e.javaClass.simpleName}).")
         } catch (e: Exception) {
-            HttpFetch(null, null, null, "The subscription could not be loaded.")
+            RawResponse(error = "The subscription could not be loaded.")
         } finally {
             runCatching { connection?.disconnect() }
         }
     }
 
-    private fun readCapped(stream: java.io.InputStream): String {
+    /**
+     * Inflates gzip when the server says it gzipped, and when it did so without
+     * saying. Falls back to the raw bytes if inflation fails, so a mislabelled
+     * response is still attempted as text rather than discarded.
+     */
+    private fun decodeBody(raw: ByteArray, contentEncoding: String?): String {
+        val encoding = contentEncoding?.lowercase()?.trim().orEmpty()
+        val gzipMagic = ResponseClassifier.isGzip(raw)
+
+        val inflated: ByteArray? = when {
+            encoding.contains("gzip") || gzipMagic ->
+                inflate(raw) { GZIPInputStream(it) }
+            encoding.contains("deflate") ->
+                inflate(raw) { InflaterInputStream(it) }
+            else -> null
+        }
+
+        if (inflated != null) return inflated.toString(Charsets.UTF_8.name())
+        if (encoding.isNotEmpty() && encoding != "identity") {
+            Log.w(TAG, "unsupported content-encoding \"$encoding\"; reading raw bytes")
+        }
+        return raw.toString(Charsets.UTF_8.name())
+    }
+
+    private fun inflate(raw: ByteArray, wrap: (java.io.InputStream) -> java.io.InputStream): ByteArray? = try {
+        wrap(raw.inputStream()).use { readCapped(it) }
+    } catch (t: Throwable) {
+        Log.w(TAG, "could not decompress the response; reading it as-is")
+        null
+    }
+
+    /**
+     * Reads at most [MAX_BODY_BYTES] **after** decompression.
+     *
+     * The cap has to apply here rather than on the socket, because a few
+     * kilobytes of gzip can expand to gigabytes.
+     */
+    private fun readCapped(stream: java.io.InputStream): ByteArray {
         val buffer = ByteArray(8 * 1024)
-        val out = java.io.ByteArrayOutputStream()
+        val out = ByteArrayOutputStream()
         var total = 0
         while (true) {
             val read = stream.read(buffer)
             if (read <= 0) break
+            val room = MAX_BODY_BYTES - total
+            if (room <= 0) break
+            out.write(buffer, 0, minOf(read, room))
             total += read
-            if (total > MAX_BODY_BYTES) {
-                // Truncate rather than fail: a valid list at the front is still
-                // usable, and the alternative is an unbounded read.
-                out.write(buffer, 0, MAX_BODY_BYTES - (total - read))
-                break
-            }
-            out.write(buffer, 0, read)
         }
-        return out.toString(Charsets.UTF_8.name())
+        return out.toByteArray()
     }
 
-    private fun isAllowedScheme(scheme: String?): Boolean =
-        scheme?.lowercase() in setOf("http", "https")
+    /** True when the payload is a document rather than a node list. */
+    private fun looksLikeMarkup(text: String): Boolean = ResponseClassifier.looksLikeMarkup(text)
+
+    private fun describeHttpFailure(code: Int): String = ResponseClassifier.describeHttpFailure(code)
+
+    private fun isAllowedScheme(scheme: String?): Boolean = ResponseClassifier.isAllowedScheme(scheme)
+
+    private data class RawResponse(
+        val httpCode: Int? = null,
+        val userInfoHeader: String? = null,
+        val bytes: ByteArray? = null,
+        val contentEncoding: String? = null,
+        val location: String? = null,
+        val error: String? = null,
+    )
 
     companion object {
-        /** ~4 MB: comfortably more than any real node list, far less than RAM. */
+        private const val TAG = "HttpFetcher"
+
+        /** ~4 MB, applied after decompression. Far more than any real node list. */
         const val MAX_BODY_BYTES = 4 * 1024 * 1024
+
+        /** Panels commonly chain one or two; more than this is a loop. */
+        const val MAX_REDIRECTS = 5
     }
 }

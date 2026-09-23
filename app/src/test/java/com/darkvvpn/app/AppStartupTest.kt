@@ -5,7 +5,10 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import androidx.test.core.app.ApplicationProvider
+import com.darkvvpn.app.data.model.VpnProtocol
+import com.darkvvpn.app.data.model.VpnServer
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -56,15 +59,71 @@ class AppStartupTest {
     }
 
     @Test
-    fun `the seeded catalogue is populated so the app is usable on first run`() {
+    fun `the app starts with no bundled nodes`() {
         val app = RuntimeEnvironment.getApplication() as DarkVvpnApplication
         val servers = app.container.serverRepository.servers.value
 
-        assertTrue("the catalogue must not be empty on a fresh install", servers.isNotEmpty())
+        // Deliberate. Earlier versions shipped demo nodes on `*.invalid`
+        // hostnames: they could never resolve, so they only ever produced
+        // failures, and they made a working import look broken because the list
+        // still showed unusable entries above the real ones. The app now starts
+        // empty and the Servers screen says why.
         assertTrue(
-            "every seeded node needs a dialable host and port",
-            servers.all { it.host.isNotBlank() && it.port in 1..65535 },
+            "no nodes should be bundled; found ${servers.map { it.host }}",
+            servers.isEmpty(),
         )
+    }
+
+    @Test
+    fun `the server repository accepts nodes and merges them without duplicates`() {
+        val app = RuntimeEnvironment.getApplication() as DarkVvpnApplication
+        val repository = app.container.serverRepository
+
+        val node = VpnServer(
+            name = "Test",
+            host = "node.example",
+            port = 443,
+            protocol = VpnProtocol.VLESS,
+            uuid = "11111111-2222-3333-4444-555555555555",
+        )
+
+        repository.addImported(listOf(node))
+        assertEquals(1, repository.servers.value.size)
+
+        // The same endpoint pasted twice must not appear twice — the merge is on
+        // protocol + host + port.
+        repository.addImported(listOf(node.copy(id = "other-id")))
+        assertEquals("a duplicate endpoint must not be added twice", 1, repository.servers.value.size)
+
+        // A subscription supersedes an identical manual entry rather than adding
+        // a second row for the same endpoint.
+        repository.replaceSubscriptionNodes(listOf(node.copy(id = "from-sub", name = "From sub")))
+        assertEquals(1, repository.servers.value.size)
+        assertEquals("From sub", repository.servers.value.single().name)
+
+        // Dropping the subscription leaves nothing behind, because the manual
+        // entry was the one it superseded.
+        repository.clearSubscriptionNodes()
+        assertTrue(repository.servers.value.isEmpty())
+    }
+
+    @Test
+    fun `a selection survives a refresh that keeps the node`() {
+        val app = RuntimeEnvironment.getApplication() as DarkVvpnApplication
+        val repository = app.container.serverRepository
+
+        val node = VpnServer(
+            name = "Keep me",
+            host = "keep.example",
+            port = 443,
+        )
+        repository.replaceSubscriptionNodes(listOf(node))
+        repository.select(node.id)
+        assertEquals(node.id, repository.selectedServerId.value)
+
+        // A refresh re-serves the same endpoint; the selection must not be lost.
+        repository.replaceSubscriptionNodes(listOf(node.copy(name = "Renamed")))
+        assertEquals(node.id, repository.selectedServerId.value)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.darkvvpn.app.data.model
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
@@ -14,7 +15,19 @@ import java.util.UUID
  * credentials. They must never be written to logcat (use
  * [com.darkvvpn.app.util.Redact]) and must not reach a cloud backup — see
  * `res/xml/backup_rules.xml`.
+ *
+ * ── Why this is @Serializable ────────────────────────────────────────────────
+ * Fetched nodes are cached to disk so a subscription survives a restart without
+ * a network round-trip. Annotating the model directly rather than writing a
+ * parallel DTO means a field added here is persisted automatically (with its
+ * default when absent from older data) instead of silently being dropped by a
+ * mapping function someone forgot to update.
+ *
+ * Enum constants are persisted by name, so renaming one changes the on-disk
+ * meaning. `StoredNodes` carries a schema version so that can be detected
+ * rather than mis-read.
  */
+@Serializable
 data class VpnServer(
     val id: String = UUID.randomUUID().toString(),
 
@@ -128,4 +141,5 @@ data class VpnServer(
         get() = "$protocol|$host|$port".lowercase()
 }
 
+/** Derived from [VpnServer.pingMs]; not persisted, so it needs no serializer. */
 enum class PingQuality { UNKNOWN, EXCELLENT, GOOD, FAIR, POOR }

@@ -1,41 +1,53 @@
 package com.darkvvpn.app.data.repository
 
 import android.util.Log
-import com.darkvvpn.app.data.model.VpnProtocol
-import com.darkvvpn.app.data.model.VpnSecurity
 import com.darkvvpn.app.data.model.VpnServer
-import com.darkvvpn.app.data.model.VpnTransport
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlin.random.Random
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
 
 /**
  * The one place the app reads nodes from.
  *
- * ── Three sources, one list ──────────────────────────────────────────────────
- *  1. **Catalogue** — the built-in demo nodes, so a fresh install is usable.
- *  2. **Imported**  — nodes pasted in as share links, owned by no subscription.
- *  3. **Subscriptions** — nodes fetched from a URL, replaced wholesale on refresh.
+ * ── Two sources, one list ────────────────────────────────────────────────────
+ *  1. **Imported** — nodes pasted in as share links, owned by no subscription.
+ *  2. **Subscriptions** — nodes fetched from a URL, replaced wholesale on refresh.
  *
  * They are kept apart internally and merged for consumers on every change. That
  * separation is what makes a refresh safe: replacing the subscription nodes
- * touches nothing the user imported by hand and nothing built in, so importing a
- * link never silently disappears because a subscription refreshed.
+ * touches nothing the user imported by hand, so a pasted link never silently
+ * disappears because a subscription refreshed.
+ *
+ * ── There is no bundled node list ────────────────────────────────────────────
+ * Earlier versions shipped demo nodes on `*.invalid` hostnames. They could not
+ * resolve, so they only ever produced failures, and they made a working import
+ * look broken because the list still showed unusable entries. The app now starts
+ * empty and says so.
  */
 class ServerRepository {
 
-    private val catalogue = MutableStateFlow(seedCatalogue())
     private val imported = MutableStateFlow<List<VpnServer>>(emptyList())
     private val fromSubscriptions = MutableStateFlow<List<VpnServer>>(emptyList())
 
-    private val _servers = MutableStateFlow(catalogue.value)
+    private val _servers = MutableStateFlow<List<VpnServer>>(emptyList())
     val servers: StateFlow<List<VpnServer>> = _servers.asStateFlow()
 
     private val _selectedServerId = MutableStateFlow<String?>(null)
     val selectedServerId: StateFlow<String?> = _selectedServerId.asStateFlow()
+
+    private val _measuring = MutableStateFlow(false)
+
+    /** True while a latency sweep is in flight, so the UI can show a spinner. */
+    val measuring: StateFlow<Boolean> = _measuring.asStateFlow()
 
     val selectedServer: VpnServer?
         get() = _servers.value.firstOrNull { it.id == _selectedServerId.value }
@@ -62,6 +74,7 @@ class ServerRepository {
         }
         imported.value = imported.value + fresh
         recompute()
+        selectFirstIfNone()
     }
 
     fun removeImported(serverId: String) {
@@ -77,28 +90,64 @@ class ServerRepository {
         pruneSelection()
     }
 
-    /** Re-runs the simulated latency probe over whatever is in the list. */
-    suspend fun refresh() {
-        delay(300)
-        _servers.update { current -> current.map { it.copy(pingMs = null) } }
-        measureAll()
-    }
+    // ------------------------------------------------------------------
+    // Latency
+    // ------------------------------------------------------------------
 
-    /** Simulated latency probe. A real build replaces this with a TCP/HTTP probe. */
+    /**
+     * Measures the real round-trip time to each node and stores it.
+     *
+     * A TCP connect is used rather than an ICMP ping: the panel's port is what
+     * actually has to be reachable, ICMP is very often filtered, and an unprivileged
+     * app cannot send ICMP anyway. The measured value is therefore "time to reach
+     * the service", which is the number a user cares about.
+     *
+     * Probes run with bounded concurrency so a 200-node subscription does not open
+     * 200 sockets at once.
+     */
     suspend fun measureAll() {
         val snapshot = _servers.value
-        for (server in snapshot) {
-            val ping = 18 + Random.nextInt(0, 320)
-            _servers.update { list ->
-                list.map {
-                    if (it.id == server.id) {
-                        it.copy(pingMs = ping, loadPercent = Random.nextInt(5, 95))
-                    } else {
-                        it
+        if (snapshot.isEmpty()) return
+
+        _measuring.value = true
+        try {
+            // Clear first: leaving a stale figure next to a node being retested
+            // reads as a fresh measurement.
+            _servers.update { list -> list.map { it.copy(pingMs = null) } }
+
+            val gate = Semaphore(MAX_CONCURRENT_PROBES)
+            coroutineScope {
+                snapshot.map { server ->
+                    async(Dispatchers.IO) {
+                        gate.withPermit {
+                            val latencyMs = probe(server.host, server.port)
+                            _servers.update { list ->
+                                list.map {
+                                    if (it.id == server.id) it.copy(pingMs = latencyMs) else it
+                                }
+                            }
+                        }
                     }
-                }
+                }.forEach { it.await() }
             }
-            delay(60)
+        } finally {
+            _measuring.value = false
+        }
+    }
+
+    private suspend fun probe(host: String, port: Int): Int? = withContext(Dispatchers.IO) {
+        if (host.isBlank() || port !in 1..65535) return@withContext null
+        try {
+            Socket().use { socket ->
+                val start = System.nanoTime()
+                socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
+                val elapsed = (System.nanoTime() - start) / 1_000_000
+                elapsed.toInt().coerceAtLeast(0)
+            }
+        } catch (t: Throwable) {
+            // Unreachable is a legitimate answer, and a more useful one than a
+            // made-up number: the row shows "—" instead of a latency that lies.
+            null
         }
     }
 
@@ -118,22 +167,21 @@ class ServerRepository {
         }
     }
 
+    fun clearSelection() {
+        _selectedServerId.value = null
+    }
+
     // ------------------------------------------------------------------
     // Merge
     // ------------------------------------------------------------------
 
     /**
-     * Merges the three sources: subscription nodes first (they are the ones with
-     * real credentials), then imported, then the built-in catalogue as filler so
-     * the list is never empty on a fresh install.
-     *
-     * Deduplication is on [VpnServer.nodeKey] (protocol + host + port). The later
-     * source wins, so a subscription node supersedes a same-endpoint demo node.
+     * Merges the two sources. Deduplication is on [VpnServer.nodeKey]
+     * (protocol + host + port), and the subscription wins: it is the source that
+     * carries an account, so it should supersede an identical manual entry.
      */
     private fun recompute() {
         val merged = LinkedHashMap<String, VpnServer>()
-        // Insert lowest priority first so higher priority overwrites.
-        catalogue.value.forEach { merged[it.nodeKey] = it }
         imported.value.forEach { merged[it.nodeKey] = it }
         fromSubscriptions.value.forEach { merged[it.nodeKey] = it }
         _servers.value = merged.values.toList()
@@ -147,125 +195,12 @@ class ServerRepository {
         }
     }
 
-    private companion object {
-        const val TAG = "ServerRepository"
+    companion object {
+        private const val TAG = "ServerRepository"
+
+        /** Enough parallelism to finish a long list quickly, few enough to be polite. */
+        private const val MAX_CONCURRENT_PROBES = 12
+
+        private const val PROBE_TIMEOUT_MS = 3_000
     }
-
-    // ------------------------------------------------------------------
-    // Demo catalogue
-    // ------------------------------------------------------------------
-
-    /**
-     * Built-in demo nodes so the app has something to show before the user
-     * imports anything. They cover the protocol and transport matrix on purpose:
-     * a VLESS+REALITY node, a VLESS+Vision node, a WS node, a gRPC node, and the
-     * non-Xray Hysteria2 case — which means the config builder's branches are all
-     * exercised the moment the app is opened.
-     */
-    private fun seedCatalogue(): List<VpnServer> = listOf(
-        VpnServer(
-            name = "Amsterdam REALITY",
-            country = "Netherlands",
-            countryCode = "NL",
-            city = "Amsterdam",
-            host = "nl1.example.invalid",
-            port = 443,
-            protocol = VpnProtocol.VLESS,
-            security = VpnSecurity.REALITY,
-            transport = VpnTransport.TCP,
-            sni = "www.microsoft.com",
-            fingerprint = "chrome",
-            publicKey = "DEMO_PUBLIC_KEY_REPLACE_ME",
-            shortId = "0123456789abcdef",
-            spiderX = "/",
-            uuid = "00000000-0000-4000-8000-000000000001",
-            flow = com.darkvvpn.app.data.model.VlessFlow.VISION,
-        ),
-        VpnServer(
-            name = "Frankfurt Vision",
-            country = "Germany",
-            countryCode = "DE",
-            city = "Frankfurt",
-            host = "de1.example.invalid",
-            port = 443,
-            protocol = VpnProtocol.VLESS,
-            security = VpnSecurity.TLS,
-            transport = VpnTransport.TCP,
-            sni = "de1.example.invalid",
-            fingerprint = "chrome",
-            uuid = "00000000-0000-4000-8000-000000000002",
-            flow = com.darkvvpn.app.data.model.VlessFlow.VISION,
-        ),
-        VpnServer(
-            name = "Istanbul WebSocket",
-            country = "Türkiye",
-            countryCode = "TR",
-            city = "Istanbul",
-            host = "tr1.example.invalid",
-            port = 8443,
-            protocol = VpnProtocol.VLESS,
-            security = VpnSecurity.TLS,
-            transport = VpnTransport.WS,
-            sni = "tr1.example.invalid",
-            path = "/ws",
-            hostHeader = "tr1.example.invalid",
-            uuid = "00000000-0000-4000-8000-000000000003",
-        ),
-        VpnServer(
-            name = "Dubai gRPC",
-            country = "UAE",
-            countryCode = "AE",
-            city = "Dubai",
-            host = "ae1.example.invalid",
-            port = 443,
-            protocol = VpnProtocol.TROJAN,
-            security = VpnSecurity.TLS,
-            transport = VpnTransport.GRPC,
-            sni = "ae1.example.invalid",
-            serviceName = "grpcsvc",
-            password = "demo-trojan-password",
-            isPremium = true,
-        ),
-        VpnServer(
-            name = "Singapore VMess",
-            country = "Singapore",
-            countryCode = "SG",
-            city = "Singapore",
-            host = "sg1.example.invalid",
-            port = 443,
-            protocol = VpnProtocol.VMESS,
-            security = VpnSecurity.TLS,
-            transport = VpnTransport.WS,
-            sni = "sg1.example.invalid",
-            path = "/vm",
-            uuid = "00000000-0000-4000-8000-000000000005",
-            alterId = 0,
-        ),
-        VpnServer(
-            name = "Tokyo Shadowsocks",
-            country = "Japan",
-            countryCode = "JP",
-            city = "Tokyo",
-            host = "jp1.example.invalid",
-            port = 8388,
-            protocol = VpnProtocol.SHADOWSOCKS,
-            security = VpnSecurity.NONE,
-            transport = VpnTransport.TCP,
-            method = "aes-256-gcm",
-            password = "demo-ss-password",
-        ),
-        VpnServer(
-            name = "Toronto Hysteria2",
-            country = "Canada",
-            countryCode = "CA",
-            city = "Toronto",
-            host = "ca1.example.invalid",
-            port = 443,
-            protocol = VpnProtocol.HYSTERIA2,
-            security = VpnSecurity.TLS,
-            sni = "ca1.example.invalid",
-            password = "demo-hy2-password",
-            isPremium = true,
-        ),
-    )
 }

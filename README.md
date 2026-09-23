@@ -40,9 +40,10 @@ thousand, and why the app supports every protocol the core does.
 > Xray-core, and carries traffic. See
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit.
 >
-> ⚠️ **The bundled node list uses `.invalid` hostnames** — they exist to
-> demonstrate the UI, not to route traffic. Import a real subscription or share
-> link on the **Subs** tab to connect to something.
+> **DARK VVPN ships no built-in nodes.** Add a subscription URL or paste share
+> links on the **Subs** tab; the servers then appear on the **Servers** tab. An
+> app that starts empty and says so is more useful than one that starts with
+> entries that cannot connect.
 
 ## Features
 
@@ -105,20 +106,21 @@ surfacing as an opaque failure inside the core.
 > layout constants), so they reflect the shipped UI rather than a redesign of it.
 
 ```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   Splash    │  │    Home     │  │   Servers   │
-│             │→ │             │  │             │
-│   logo +    │  │  connect/   │  │  search +   │
-│   tagline   │  │  disconnect │  │  node list  │
-│             │  │    orb      │  │             │
-│             │  │  + stats    │  │  + latency  │
-└─────────────┘  └─────────────┘  └─────────────┘
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│   Splash    │  │    Home     │  │   Servers   │  │    Subs     │
+│             │→ │             │  │             │  │             │
+│   logo +    │  │  connect/   │  │  search +   │  │  import +   │
+│   tagline   │  │  disconnect │  │  node list  │  │  refresh +  │
+│             │  │    orb      │  │  real ping  │  │  quota      │
+│             │  │  + stats    │  │             │  │             │
+└─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
                         │
                  ┌──────┴──────┐
                  │  Settings   │
                  │ connection/ │
+                 │ subs/update/│
                  │ appearance/ │
-                 │   about     │
+                 │ diagnostics │
                  └─────────────┘
 ```
 
@@ -195,6 +197,29 @@ only things that touch persistence, and the whole dependency graph is wired by
 hand in `AppContainer` — no DI framework, because the graph is three objects
 deep. The full write-up, including the state machine and the exact place your
 tunnel core plugs in, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Getting your nodes in
+
+The app has no bundled servers, so the first step is always an import.
+
+1. **Subs** tab → **Add subscription** (a URL) or **Import share links** (paste
+   `vless://…` lines, a base64 blob, Clash YAML or sing-box JSON).
+2. The fetch runs immediately and the nodes appear on **Servers**.
+3. Nodes are cached on disk, so they are there instantly on the next launch.
+
+**If the list stays empty**, the message on the subscription row says why:
+
+| Message | What it means |
+|---|---|
+| "The server returned a web page instead of a node list" | The URL is wrong, expired, or behind a login — you got the panel's HTML |
+| "The subscription was refused (HTTP 403)" | The link expired, or the provider blocks this app |
+| "The subscription was not found (HTTP 404)" | A typo or a truncated token in the URL |
+| "No usable node was found in the subscription payload" | The fetch worked but the body is not a format this app parses |
+| "Could not reach the subscription" | No network, or the host is unreachable |
+
+Press **Retry** on the row, or the toolbar button, to re-fetch everything.
+**Settings → Diagnostics** shows the tunnel core's own messages for connection
+problems.
 
 ## How the tunnel fits together
 

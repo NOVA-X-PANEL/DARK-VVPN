@@ -67,7 +67,26 @@ class SubscriptionsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
-        viewModelScope.launch { repository.load() }
+        viewModelScope.launch {
+            // Loading restores both the subscription list and its cached node
+            // list from disk. The nodes must then be pushed into the catalogue:
+            // this is the step whose absence made an imported subscription show
+            // an empty Servers screen until the next scheduled refresh.
+            repository.load()
+            publishNodes()
+
+            // If a subscription has no cached nodes — a first run, or a cache
+            // written by an older schema — fetch now rather than waiting for the
+            // interval. Otherwise a restart inside the refresh window leaves the
+            // user with nothing to connect to.
+            if (repository.hasSubscriptionsWithoutNodes()) {
+                val settings = settingsRepository.settings.first()
+                if (!settings.subscriptionRefreshOverWifiOnly || networkIsUnmetered()) {
+                    repository.refreshAllAuto(settings.subscriptionUserAgent)
+                    publishNodes()
+                }
+            }
+        }
     }
 
     // ---- refresh ------------------------------------------------------
@@ -95,30 +114,8 @@ class SubscriptionsViewModel(
         }
     }
 
-    fun refreshAll() {
-        val ids = subscriptions.value.filter { it.enabled }.map { it.id }
-        if (ids.isEmpty()) {
-            _message.value = SubscriptionMessage("There is nothing to refresh yet.", isError = false)
-            return
-        }
-        viewModelScope.launch {
-            _refreshingIds.update { it + ids }
-            try {
-                val userAgent = settingsRepository.settings.first().subscriptionUserAgent
-                val results = repository.refreshAllAuto(userAgent)
-                publishNodes()
-                val ok = results.count { it.second is RefreshOutcome.Success }
-                val failed = results.size - ok
-                _message.value = SubscriptionMessage(
-                    if (failed == 0) "Updated $ok subscription(s)."
-                    else "Updated $ok, $failed failed.",
-                    isError = failed > 0 && ok == 0,
-                )
-            } finally {
-                _refreshingIds.update { it - ids.toSet() }
-            }
-        }
-    }
+    /** The toolbar button: fetch everything enabled, not just the auto ones. */
+    fun refreshAll() = refreshEverything()
 
     /**
      * Runs a scheduled refresh only when one is due, so launching the app does
@@ -134,6 +131,42 @@ class SubscriptionsViewModel(
             val userAgent = settings.subscriptionUserAgent
             repository.refreshAllAuto(userAgent)
             publishNodes()
+        }
+    }
+
+    /**
+     * Fetches every enabled subscription, whatever the schedule says.
+     *
+     * This is what the user reaches for when the list is empty or a node stopped
+     * working, so it reports what happened instead of finishing silently.
+     */
+    fun refreshEverything() {
+        viewModelScope.launch {
+            val targets = subscriptions.value.filter { it.enabled }
+            if (targets.isEmpty()) {
+                _message.value = SubscriptionMessage("There is nothing to refresh yet.", isError = false)
+                return@launch
+            }
+            _refreshingIds.update { it + targets.map { s -> s.id } }
+            try {
+                val userAgent = settingsRepository.settings.first().subscriptionUserAgent
+                val results = repository.refreshAll(userAgent)
+                publishNodes()
+                val ok = results.count { it.second is RefreshOutcome.Success }
+                val failed = results.size - ok
+                val nodes = repository.allNodes().size
+                _message.value = if (failed == 0) {
+                    SubscriptionMessage("Updated $ok subscription(s) — $nodes node(s).", isError = false)
+                } else {
+                    val firstError = results.firstNotNullOfOrNull { it.second as? RefreshOutcome.Failure }
+                    SubscriptionMessage(
+                        "Updated $ok of ${results.size}. ${firstError?.reason.orEmpty()}".trim(),
+                        isError = ok == 0,
+                    )
+                }
+            } finally {
+                _refreshingIds.update { it - targets.map { s -> s.id }.toSet() }
+            }
         }
     }
 

@@ -1,5 +1,7 @@
 package com.darkvvpn.app.data.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * The outbound protocol a [VpnServer] speaks.
  *
@@ -13,6 +15,7 @@ package com.darkvvpn.app.data.model
  * exception is documented on its entry; everything else is rendered as an Xray
  * outbound by [com.darkvvpn.app.xray.XrayConfigBuilder].
  */
+@Serializable
 enum class VpnProtocol(
     val label: String,
     val defaultPort: Int,
@@ -77,6 +80,7 @@ enum class VpnProtocol(
  * These names match Xray's `streamSettings.security` values verbatim, so they
  * are written straight into the generated config.
  */
+@Serializable
 enum class VpnSecurity(val wireName: String, val label: String) {
     NONE("none", "None"),
     TLS("tls", "TLS"),
@@ -103,6 +107,7 @@ enum class VpnSecurity(val wireName: String, val label: String) {
  * `streamSettings.network`; note that `httpupgrade` and `splithttp` are spelled
  * exactly as Xray spells them.
  */
+@Serializable
 enum class VpnTransport(val wireName: String, val label: String) {
     TCP("tcp", "TCP"),
     RAW("raw", "RAW"),
@@ -145,6 +150,7 @@ enum class VpnTransport(val wireName: String, val label: String) {
  * The XTLS flow control value. Only meaningful for VLESS over TLS/REALITY;
  * `xtls-rprx-vision` is the modern one and the only one worth offering.
  */
+@Serializable
 enum class VlessFlow(val wireName: String, val label: String) {
     NONE("", "None"),
     VISION("xtls-rprx-vision", "Vision"),

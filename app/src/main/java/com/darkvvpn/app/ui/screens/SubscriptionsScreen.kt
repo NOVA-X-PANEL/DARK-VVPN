@@ -72,8 +72,8 @@ fun SubscriptionsScreen(
     var dialogMode by remember { mutableStateOf(ImportDialogMode.Hidden) }
     var pendingDelete by remember { mutableStateOf<Subscription?>(null) }
 
-    // A refresh runs on a schedule; check once when the screen first appears.
-    LaunchedEffect(Unit) { viewModel.refreshIfDue() }
+    // The startup refresh lives in the ViewModel's init, so it has already run by
+    // the time this screen exists — doing it here as well would fetch twice.
 
     // A link opened from another app is offered for import straight away.
     LaunchedEffect(prefillPayload) {

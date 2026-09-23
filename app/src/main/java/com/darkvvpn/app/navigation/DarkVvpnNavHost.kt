@@ -36,7 +36,13 @@ fun DarkVvpnNavHost(
             )
         }
 
-        composable(Routes.SERVERS) { ServersScreen() }
+        composable(Routes.SERVERS) {
+            ServersScreen(
+                // The empty state's call to action: the fix for "no servers" is
+                // importing one, so that is where the button goes.
+                onNavigateToSubscriptions = { navController.navigate(Routes.SUBSCRIPTIONS) },
+            )
+        }
 
         composable(
             route = "${Routes.SUBSCRIPTIONS}?payload={payload}",

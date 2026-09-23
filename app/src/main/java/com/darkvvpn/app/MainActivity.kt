@@ -41,6 +41,7 @@ import com.darkvvpn.app.ui.components.UpdateDialog
 import com.darkvvpn.app.ui.theme.DarkVvpnTheme
 import com.darkvvpn.app.util.NetworkState
 import com.darkvvpn.app.viewmodel.SettingsViewModel
+import com.darkvvpn.app.viewmodel.SubscriptionsViewModel
 import com.darkvvpn.app.viewmodel.UpdateUiState
 import com.darkvvpn.app.viewmodel.UpdateViewModel
 import com.darkvvpn.app.viewmodel.VpnViewModel
@@ -110,6 +111,12 @@ private fun DarkVvpnApp(initialPayload: String?) {
 
     // The VPN ViewModel is read here only to run its launch-time auto-connect.
     val vpnViewModel: VpnViewModel = viewModel(factory = VpnViewModel.Factory)
+
+    // Instantiated at launch, not when the Subscriptions tab is first opened, so
+    // the cached node list is restored into the catalogue before the user can
+    // reach the Servers screen. Skipping this is what left an imported
+    // subscription showing an empty server list.
+    viewModel(factory = SubscriptionsViewModel.Factory)
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
