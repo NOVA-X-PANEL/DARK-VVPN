@@ -80,7 +80,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             // must be a VectorDrawable or a real bitmap; see
             // ComposeResourceSafetyTest.
             Image(
-                painter = painterResource(id = R.drawable.splash_logo),
+                painter = painterResource(id = R.mipmap.ic_launcher),
                 contentDescription = null,
                 modifier = Modifier.size(140.dp),
             )
