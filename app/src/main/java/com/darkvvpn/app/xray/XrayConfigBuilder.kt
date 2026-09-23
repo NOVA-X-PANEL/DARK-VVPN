@@ -332,7 +332,8 @@ object XrayConfigBuilder {
                     addJsonObject {
                         put("publicKey", server.wgPeerPublicKey.orEmpty())
                         server.wgPreSharedKey?.takeIf { it.isNotBlank() }
-                            ?.let { put("preSharedKey", it) }                        put("endpoint", "${server.host}:${server.port}")
+                            ?.let { put("preSharedKey", it) }
+                        put("endpoint", "${server.host}:${server.port}")
                         putJsonArray("allowedIPs") {
                             add("0.0.0.0/0")
                             add("::/0")

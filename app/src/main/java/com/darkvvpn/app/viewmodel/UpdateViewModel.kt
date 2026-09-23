@@ -71,6 +71,36 @@ class UpdateViewModel(
     /** Set when the user presses "Later", so the sheet does not reopen this session. */
     private var dismissedThisSession = false
 
+    init {
+        // Mirror the downloader's progress into the sheet. The downloader owns
+        // the transfer; the ViewModel only relays its numbers, so there is one
+        // source of truth for how far along a download is.
+        viewModelScope.launch {
+            downloader.state.collect { progress ->
+                val current = _state.value as? UpdateUiState.Available ?: return@collect
+                _state.value = when (progress) {
+                    is DownloadState.Running -> current.copy(
+                        isDownloading = true,
+                        downloadFraction = progress.fraction,
+                        downloadedBytes = progress.bytesRead,
+                        totalBytes = progress.totalBytes ?: current.totalBytes,
+                    )
+                    is DownloadState.Complete -> current.copy(
+                        isDownloading = false,
+                        downloadFraction = 1f,
+                        readyToInstall = progress.file,
+                        readyVerified = progress.sha256Verified,
+                    )
+                    is DownloadState.Idle -> current.copy(
+                        isDownloading = false,
+                        downloadFraction = null,
+                    )
+                    is DownloadState.Failed -> current  // handled by the awaiting call
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------
     // Check
     // ------------------------------------------------------------------
