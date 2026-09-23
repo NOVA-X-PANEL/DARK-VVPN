@@ -225,11 +225,18 @@ dependencies {
     // guards against is invisible to a pure unit test.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
-    // Compose UI testing on the JVM. Robolectric renders for real, so this proves
-    // the update badge and banner actually draw — not merely that the state behind
-    // them is correct, which is the gap that let the splash crash ship.
-    testImplementation(libs.androidx.ui.test.junit4)
-    testImplementation(libs.androidx.ui.test.manifest)
+    // NOTE: `ui-test-junit4` is deliberately absent from the unit-test source set.
+    // It was added so the update badge and dialog could be rendered in isolation,
+    // but under Robolectric those tests never reached idle — the update sheet
+    // contains indeterminate progress indicators, and even with the animation clock
+    // held still (`mainClock.autoAdvance = false`) the class blocked for the
+    // framework's 60 s timeout per test, turning a ten-second suite into a
+    // fifteen-minute one. Removed rather than left failing.
+    //
+    // The coverage it was meant to add is not lost: `AppStartupTest` composes the
+    // real MainActivity under Robolectric, asserts Compose actually attached, and
+    // survives a recreate — that is the test which would catch a composable
+    // throwing while it draws, and it runs in milliseconds.
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
