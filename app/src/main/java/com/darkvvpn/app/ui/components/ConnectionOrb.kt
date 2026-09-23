@@ -107,6 +107,12 @@ fun ConnectionOrb(
             val radius = size.minDimension / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
 
+            // Ring thickness in density-independent units. DrawScope works in
+            // pixels, so a raw constant here would render visually thinner on
+            // low-density screens and heavier on high-density ones.
+            val ringWidth = 5.dp.toPx()
+            val ringRadius = radius * 0.74f
+
             // Soft outer glow, brighter while the tunnel is up.
             val glowAlpha = if (state.isConnected) 0.34f else 0.16f
             drawCircle(
@@ -122,18 +128,18 @@ fun ConnectionOrb(
             // Track ring.
             drawCircle(
                 color = Ink700,
-                radius = radius * 0.74f,
+                radius = ringRadius,
                 center = center,
-                style = Stroke(width = 10f),
+                style = Stroke(width = ringWidth),
             )
 
             // Accent ring — pulses while busy and settles when idle.
-            val ringRadius = radius * 0.74f * if (state.isBusy) pulse else 1f
+            val pulseRadius = ringRadius * if (state.isBusy) pulse else 1f
             drawCircle(
                 color = accent,
-                radius = ringRadius,
+                radius = pulseRadius,
                 center = center,
-                style = Stroke(width = 10f),
+                style = Stroke(width = ringWidth),
             )
 
             // Indeterminate sweep while connecting/disconnecting.
@@ -143,9 +149,9 @@ fun ConnectionOrb(
                     startAngle = sweep,
                     sweepAngle = 70f,
                     useCenter = false,
-                    topLeft = Offset(center.x - radius * 0.74f, center.y - radius * 0.74f),
-                    size = Size(radius * 0.74f * 2f, radius * 0.74f * 2f),
-                    style = Stroke(width = 10f, cap = StrokeCap.Round),
+                    topLeft = Offset(center.x - ringRadius, center.y - ringRadius),
+                    size = Size(ringRadius * 2f, ringRadius * 2f),
+                    style = Stroke(width = ringWidth, cap = StrokeCap.Round),
                 )
             }
         }

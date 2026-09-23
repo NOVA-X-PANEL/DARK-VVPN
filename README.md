@@ -50,6 +50,25 @@ anything else — without rewriting the UI around it.
 
 ## Screens
 
+<div align="center">
+
+![DARK VVPN screens](docs/screenshots/00-overview.png)
+
+</div>
+
+| | |
+|---|---|
+| ![Splash](docs/screenshots/01-splash.png) | ![Home, disconnected](docs/screenshots/02-home-disconnected.png) |
+| **Splash** — brand mark and tagline | **Home** — one-tap connect |
+| ![Home, connected](docs/screenshots/03-home-connected.png) | ![Servers](docs/screenshots/04-servers.png) |
+| **Home, connected** — live session counters | **Servers** — search, latency sort, protocol badges |
+| ![Settings](docs/screenshots/05-settings.png) | |
+| **Settings** — connection, appearance and about | |
+
+> These previews are rendered from the same design tokens the app uses
+> (`ui/theme/Color.kt`, the type scale in `ui/theme/Type.kt`, and each screen's
+> layout constants), so they reflect the shipped UI rather than a redesign of it.
+
 ```
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │   Splash    │  │    Home     │  │   Servers   │
