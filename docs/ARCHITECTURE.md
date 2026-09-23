@@ -289,6 +289,51 @@ framework: the first version asked `BitmapFactory.decodeResource` whether a
 drawable was rasterizable, and under Robolectric that call returns a synthetic
 bitmap for *every* id — the assertion could never fail.
 
+## Why a node would not connect: ALPN
+
+Found by fetching a reporter's live subscription and measuring it. The panel
+served this shape:
+
+```
+vless://…@www.speedtest.net:8443?type=ws&security=tls
+      &alpn=h2%2Chttp%2F1.1%2Ch3&sni=panel…&path=%2F%40CHANNEL
+```
+
+Passing `alpn=h2,http/1.1,h3` straight into the config makes the server negotiate
+**h2**, and a WebSocket node needs the HTTP/1.1 `Upgrade` handshake. The upgrade
+request is answered with HTTP/2 binary frames instead of
+`101 Switching Protocols`, and the tunnel never establishes. Measured over TLS
+with the link's own SNI:
+
+| ALPN offered | negotiated | `GET /@CHANNEL` upgrade |
+|---|---|---|
+| `h2,http/1.1,h3` | `h2` | binary frames, no upgrade |
+| `http/1.1` | `http/1.1` | `101 Switching Protocols` |
+| *(none)* | *(none)* | `101 Switching Protocols` |
+
+`AlpnPolicy` therefore decides per transport rather than trusting the link. WS and
+HTTPUpgrade drop `h2` — they run an HTTP/1.1 upgrade, and Xray's `ws` transport
+does not implement RFC 8441 Extended CONNECT, so h2 is never correct for them.
+HTTP/2 and gRPC keep it, and get it added when a panel omitted it. `h3` is dropped
+everywhere, because it is a QUIC identifier with no meaning in a TCP handshake.
+An empty result is left empty, since offering no ALPN was measured to work.
+
+The parser still stores the panel's own ALPN. The decision belongs to the config
+builder, which is the only component that knows what the transport can speak —
+and keeping the parsed value intact means it stays inspectable.
+
+### The same list also carried a node that could never work
+
+```
+vless://…@1.2.3.4.5:1234?type=tcp&security=none#Update+your+subscription+daily
+```
+
+Five octets: not an address, not a hostname, never resolvable. Providers inject
+these to talk to their users, and imported faithfully they become rows that show
+"—" and fail when picked — indistinguishable from a broken server. `HostValidator`
+rejects them, while deliberately still allowing private LAN addresses, because a
+self-hosted panel at home is a legitimate node.
+
 ## Why a subscription could import and still show nothing
 
 Three independent faults produced one symptom, which is why it took a report from
