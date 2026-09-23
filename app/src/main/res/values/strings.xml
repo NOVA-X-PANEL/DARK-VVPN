@@ -58,6 +58,10 @@
     <string name="update_banner_body">Tap to see what changed and install it.</string>
     <string name="update_banner_body_prerelease">A pre-release. Tap to see the notes.</string>
     <string name="update_banner_action">Update</string>
+    <string name="update_uptodate_title">Up to date</string>
+    <string name="update_check_failed_title">Update check failed</string>
+    <string name="update_checking_body">Contacting GitHub for the latest release…</string>
+    <string name="update_check_failed_hint">This is usually a rate limit on shared networks, or no connection. Retry in a few minutes. You can select the text above to copy it.</string>
 
     <!-- Settings: subscriptions & updates -->
     <string name="settings_subscriptions">Subscriptions</string>
@@ -72,6 +76,8 @@
     <string name="settings_update_check_now">Check for updates</string>
     <string name="settings_update_check_action">Check now</string>
     <string name="settings_update_available_short">%1$s ready</string>
+    <string name="settings_update_failed_short">Check failed</string>
+    <string name="settings_update_current_short">Up to date</string>
     <string name="settings_update_unskip">Show skipped versions again</string>
 
     <!-- Protocol detail -->

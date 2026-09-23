@@ -223,21 +223,12 @@ private fun DarkVvpnApp(initialPayload: String?) {
     }
 
     // ---- update sheet ----
-    when (val state = updateState) {
-        is UpdateUiState.Available -> UpdateDialog(
-            releaseTag = state.release.tag,
-            releaseName = state.release.name,
-            releaseNotes = state.release.notes,
-            installedVersion = state.installedVersion,
-            apkSizeBytes = state.release.apkSizeBytes,
-            isDownloading = state.isDownloading,
-            downloadFraction = state.downloadFraction,
-            downloadedBytes = state.downloadedBytes,
-            totalBytes = state.totalBytes ?: state.release.apkSizeBytes,
-            readyToInstall = state.readyToInstall != null,
-            readyVerified = state.readyVerified,
-            needsInstallPermission = state.needsInstallPermission,
-            error = state.error,
+    // Every state except Hidden is rendered by the sheet, including "you are up to
+    // date" and "the check failed". Those two used to dismiss themselves, which is
+    // what made tapping the update banner appear to do nothing at all.
+    if (updateState !is UpdateUiState.Hidden) {
+        UpdateDialog(
+            state = updateState,
             onDownload = updateViewModel::download,
             onCancelDownload = updateViewModel::cancelDownload,
             onInstall = { updateViewModel.install() },
@@ -249,21 +240,10 @@ private fun DarkVvpnApp(initialPayload: String?) {
                     ),
                 )
             },
+            onRetry = updateViewModel::check,
             onSkip = updateViewModel::skipThisVersion,
             onDismiss = updateViewModel::closeSheet,
         )
-
-        is UpdateUiState.UpToDate -> LaunchedEffect(state) {
-            // A manual check reports success through the Settings screen, which
-            // shows its own confirmation; nothing to draw here.
-            updateViewModel.dismissTransientState()
-        }
-
-        is UpdateUiState.Failed -> LaunchedEffect(state) {
-            updateViewModel.dismissTransientState()
-        }
-
-        else -> Unit
     }
 
     // An import arriving via intent is handled by the Subscriptions screen; keep

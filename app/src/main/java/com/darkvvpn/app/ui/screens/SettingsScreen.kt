@@ -58,6 +58,11 @@ fun SettingsScreen(
 
     val updateBadge by updateViewModel.badge.collectAsStateWithLifecycle()
     val checkReport by updateViewModel.checkReport.collectAsStateWithLifecycle()
+    val checkReportIsError by updateViewModel.checkReportIsError.collectAsStateWithLifecycle()
+
+    // `updateBadge` is a delegated property, so its field cannot smart-cast inside
+    // the row's lambda; captured once here.
+    val badgeVersion = updateBadge?.version
 
     // The core reports its version only once it has been initialised, which
     // happens on the first connect. Read it lazily rather than forcing init here.
@@ -178,18 +183,26 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::setAllowPrereleaseUpdates,
             )
             RowDivider()
+            // The row is never left looking idle: it shows the badge's version, or
+            // the outcome of the last check including a failure. An idle-looking
+            // row next to a feature that silently failed is indistinguishable from
+            // a feature that is broken.
             ClickableRow(
                 title = stringResource(R.string.settings_update_check_now),
-                value = if (updateBadge != null) {
-                    stringResource(R.string.settings_update_available_short, updateBadge!!.version)
-                } else {
-                    stringResource(R.string.settings_update_check_action)
+                value = when {
+                    badgeVersion != null ->
+                        stringResource(R.string.settings_update_available_short, badgeVersion)
+                    checkReportIsError && checkReport != null ->
+                        stringResource(R.string.settings_update_failed_short)
+                    checkReport != null ->
+                        stringResource(R.string.settings_update_current_short)
+                    else -> stringResource(R.string.settings_update_check_action)
                 },
                 onClick = updateViewModel::check,
             )
             checkReport?.let { report ->
                 RowDivider()
-                UpdateCheckReport(message = report, isNotice = false)
+                UpdateCheckReport(message = report, isNotice = checkReportIsError)
             }
             if (skippedTag != null) {
                 RowDivider()

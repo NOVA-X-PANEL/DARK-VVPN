@@ -99,8 +99,21 @@ class UpdateViewModel(
 
     private val _checkReport = MutableStateFlow<String?>(null)
 
-    /** One line of feedback for the manual check, shown under the Settings row. */
+    /**
+     * The outcome of the most recent check, whatever triggered it.
+     *
+     * Set by silent launch checks too, not only manual ones: a check that fails
+     * quietly leaves the Settings row looking idle, which is indistinguishable
+     * from a feature that is not working. A shared mobile network exhausting
+     * GitHub's 60-requests-an-hour limit is the realistic case, and the user needs
+     * to be told that happened rather than shown nothing.
+     */
     val checkReport: StateFlow<String?> = _checkReport.asStateFlow()
+
+    private val _checkReportIsError = MutableStateFlow(false)
+
+    /** True when [checkReport] is a failure, so it can be shown in the error colour. */
+    val checkReportIsError: StateFlow<Boolean> = _checkReportIsError.asStateFlow()
 
     val downloadState: StateFlow<DownloadState> = downloader.state
 
@@ -206,6 +219,7 @@ class UpdateViewModel(
     fun check() {
         viewModelScope.launch {
             _checkReport.value = null
+            _checkReportIsError.value = false
             runCheck(settingsSnapshot, silent = false)
         }
     }
@@ -249,18 +263,20 @@ class UpdateViewModel(
 
             is UpdateCheckResult.UpToDate -> {
                 _state.value = if (silent) UpdateUiState.Hidden else UpdateUiState.UpToDate(BuildConfig.VERSION_NAME)
-                if (!silent) {
-                    _checkReport.value = if (result.latestTag != null) {
-                        "You are on the newest version (${BuildConfig.VERSION_NAME})."
-                    } else {
-                        "No published release was found."
-                    }
+                _checkReportIsError.value = false
+                _checkReport.value = if (result.latestTag != null) {
+                    "You are on the newest version (${BuildConfig.VERSION_NAME})."
+                } else {
+                    "No published release was found."
                 }
             }
 
             is UpdateCheckResult.Failed -> {
                 _state.value = if (silent) UpdateUiState.Hidden else UpdateUiState.Failed(result.reason)
-                if (!silent) _checkReport.value = result.reason
+                // Recorded even for a silent check, so the Settings row can say
+                // why there is no badge instead of looking idle.
+                _checkReportIsError.value = true
+                _checkReport.value = result.reason
             }
         }
     }
@@ -269,13 +285,22 @@ class UpdateViewModel(
     // Sheet
     // ------------------------------------------------------------------
 
-    /** Opens the sheet for the known release, reusing it if already fetched. */
+    /**
+     * Opens the sheet, reusing an already-fetched release when there is one.
+     *
+     * Deliberately does **not** require a badge. The badge is absent in two
+     * situations that both need the sheet: the user is already up to date, or the
+     * last check failed. Returning early in those cases is what made the update
+     * control appear dead.
+     */
     fun openSheet() {
-        val badge = _badge.value ?: return
-        val cached = lastKnownRelease
         val installed = installer.installedVersionName() ?: BuildConfig.VERSION_NAME
+        val cached = lastKnownRelease
 
-        if (cached != null && cached.tag == badge.tag) {
+        // Reuse a release this process has already fetched, but only when it is the
+        // one the badge is about — otherwise the sheet would describe a different
+        // version from the one the user tapped.
+        if (cached != null && _badge.value?.tag == cached.tag) {
             _state.value = UpdateUiState.Available(
                 release = cached,
                 installedVersion = installed,
@@ -284,18 +309,14 @@ class UpdateViewModel(
             return
         }
 
-        // The badge came from storage and this process has not seen the release
-        // body yet, so fetch it before showing a sheet with empty notes.
-        viewModelScope.launch {
-            _state.value = UpdateUiState.Checking
-            runCheck(settingsSnapshot, silent = false)
-        }
+        // Otherwise just check. Every outcome is rendered now, so this always
+        // produces something visible rather than a sheet that closes itself.
+        check()
     }
 
+    /** Closes the sheet. Refuses while a download is in flight. */
     fun closeSheet() {
         val current = _state.value
-        // Keep an in-flight download: closing the sheet mid-transfer would leave a
-        // progress bar with nothing behind it.
         if (current is UpdateUiState.Available && current.isDownloading) return
         _state.value = UpdateUiState.Hidden
     }
@@ -373,15 +394,17 @@ class UpdateViewModel(
         viewModelScope.launch { settingsRepository.setSkippedUpdateTag(null) }
     }
 
-    fun dismissTransientState() {
-        val current = _state.value
-        if (current is UpdateUiState.UpToDate || current is UpdateUiState.Failed) {
-            _state.value = UpdateUiState.Hidden
-        }
-    }
+    /**
+     * Removed: a transient state is now the sheet's *content*.
+     *
+     * `UpToDate` and `Failed` used to trigger an automatic dismissal here, which
+     * is why tapping the update banner and being already current — or losing the
+     * network — made the dialog flash and disappear with no explanation.
+     */
 
     fun clearCheckReport() {
         _checkReport.value = null
+        _checkReportIsError.value = false
     }
 
     fun consumeError() {

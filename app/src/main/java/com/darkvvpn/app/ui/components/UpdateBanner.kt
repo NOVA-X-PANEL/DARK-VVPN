@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -92,13 +95,26 @@ fun UpdateBanner(
             )
         }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(12.dp))
 
-        Text(
-            text = stringResource(R.string.update_banner_action),
-            style = MaterialTheme.typography.labelLarge,
-            color = BrandAmber,
-        )
+        // A real Button, not amber text. As a label the action did not read as
+        // something to press, which is the other half of "the update control is
+        // not working": it was tappable, but it did not look it.
+        Button(
+            onClick = onClick,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BrandAmber,
+                contentColor = InkOnAmber,
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(50),
+        ) {
+            Text(
+                text = stringResource(R.string.update_banner_action),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 
