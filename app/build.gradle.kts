@@ -1,3 +1,9 @@
+// Kotlin scripts resolve a bare `java` to Gradle's JavaPluginExtension, not to
+// the JDK package root, so the two JDK types this script needs are imported by
+// name instead of qualified.
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -41,7 +47,7 @@ val fetchXrayCore by tasks.registering {
         target.parentFile.mkdirs()
         val partial = File(target.parentFile, "${target.name}.part")
         logger.lifecycle("Downloading Xray core $xrayCoreVersion…")
-        java.net.URI(xrayCoreUrl).toURL().openStream().use { input ->
+        URI(xrayCoreUrl).toURL().openStream().use { input ->
             partial.outputStream().buffered().use { output -> input.copyTo(output) }
         }
         val actual = sha256(partial)
@@ -62,7 +68,7 @@ val fetchXrayCore by tasks.registering {
 }
 
 fun sha256(file: File): String {
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    val digest = MessageDigest.getInstance("SHA-256")
     file.inputStream().use { stream ->
         val buffer = ByteArray(1 shl 16)
         while (true) {
@@ -71,10 +77,12 @@ fun sha256(file: File): String {
             digest.update(buffer, 0, read)
         }
     }
-    return digest.digest().joinToString("") { "%02x".format(it) }
+    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
 }
 
-// The core must exist before anything compiles against it.
+// The core must exist before anything compiles against it. `builtBy` on the
+// dependency covers the classpath consumers; these cover the packaging tasks,
+// which also read the AAR's native libraries.
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(fetchXrayCore) }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("NativeLibs") }
     .configureEach { dependsOn(fetchXrayCore) }
@@ -143,8 +151,10 @@ android {
 }
 
 dependencies {
-    // The tunnel core (Xray-core via gomobile). Downloaded and verified above.
-    implementation(files(xrayCoreAar))
+    // The tunnel core (Xray-core via gomobile). `builtBy` makes the download an
+    // explicit dependency of everything that consumes this classpath, so Gradle
+    // cannot start compiling against a file that has not been fetched yet.
+    implementation(files(xrayCoreAar).builtBy(fetchXrayCore))
 
     // Core & lifecycle
     implementation(libs.androidx.core.ktx)
