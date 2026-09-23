@@ -356,7 +356,9 @@ object XrayConfigBuilder {
         body: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit,
     ): JsonObject = buildJsonObject {
         put("tag", OUTBOUND_TAG_PROXY)
-        put("protocol", server.protocol.uriScheme)
+        // The Xray name, not the share-link scheme: `ss://` is distributed as
+        // `shadowsocks` in a config, and the other way round fails to start.
+        put("protocol", server.protocol.xrayProtocol)
         body()
         buildStreamSettings(server)?.let { put("streamSettings", it) }
         putJsonObject("mux") {
@@ -417,15 +419,19 @@ object XrayConfigBuilder {
         val path = server.path?.takeIf { it.isNotBlank() }
         val hostHeader = server.hostHeader ?: server.sni ?: server.host
 
-        fun headers(): JsonObject = buildJsonObject {
-            putJsonObject("headers") { put("Host", hostHeader) }
+        // Xray expects `"headers": { "Host": "…" }` — a flat object whose key is
+        // the header name. Nesting another `headers` level here produces a config
+        // where the Host is silently ignored, which breaks WS nodes whose server
+        // routes on it.
+        fun wsHeaders(): JsonObject = buildJsonObject {
+            put("Host", hostHeader)
         }
 
         return when (server.transport) {
             VpnTransport.WS -> mapOf(
                 "wsSettings" to buildJsonObject {
                     put("path", path ?: "/")
-                    put("headers", headers())
+                    put("headers", wsHeaders())
                 },
             )
 

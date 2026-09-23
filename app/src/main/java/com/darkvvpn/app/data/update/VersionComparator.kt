@@ -88,11 +88,41 @@ object VersionComparator {
                 // Numeric identifiers always have lower precedence than alphanumeric.
                 ln != null -> -1
                 rn != null -> 1
-                else -> l.compareTo(r, ignoreCase = true)
+                else -> compareAlphanumeric(l, r)
             }
             if (diff != 0) return diff
         }
         return 0
+    }
+
+    /**
+     * Compares two alphanumeric pre-release identifiers, splitting a trailing
+     * number out so it compares numerically.
+     *
+     * This is a deliberate deviation from semver's rule 11, which compares the
+     * whole identifier lexically and therefore ranks `rc9` **above** `rc10`.
+     * That is technically correct and practically wrong: a user looking at
+     * `1.0.0-rc10` believes it is newer than `1.0.0-rc9`, and an updater that
+     * disagrees will refuse to offer it or, worse, offer a downgrade.
+     */
+    private fun compareAlphanumeric(l: String, r: String): Int {
+        val (lPrefix, lDigit) = splitTrailingNumber(l)
+        val (rPrefix, rDigit) = splitTrailingNumber(r)
+
+        val prefixDiff = lPrefix.compareTo(rPrefix, ignoreCase = true)
+        if (prefixDiff != 0) return prefixDiff
+
+        // Same prefix: `rc` with no number sorts below `rc1`.
+        if (lDigit == null && rDigit == null) return 0
+        if (lDigit == null) return -1
+        if (rDigit == null) return 1
+        return lDigit.compareTo(rDigit)
+    }
+
+    private fun splitTrailingNumber(identifier: String): Pair<String, Int?> {
+        val digits = identifier.takeLastWhile { it.isDigit() }
+        if (digits.isEmpty()) return identifier to null
+        return identifier.dropLast(digits.length) to digits.toIntOrNull()
     }
 
     private data class Parsed(val numbers: List<Int>, val preRelease: String?)

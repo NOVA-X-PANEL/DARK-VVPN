@@ -62,16 +62,40 @@ object GeoNaming {
         return ResolvedGeo("", "", "")
     }
 
+    /**
+     * Extracts the city from a remark by removing the country name and seeing
+     * what is left.
+     *
+     * The country usually arrives from the flag emoji, which is *not* the text in
+     * the remark — `🇳🇱 Amsterdam` names the city and encodes the country, so
+     * searching the remark for "Netherlands" finds nothing. Stripping the
+     * country when present and treating the remainder as the candidate handles
+     * both shapes.
+     */
     private fun cityFromRemark(remark: String, country: String?): String {
-        val cleaned = stripDecoration(remark)
-        if (country.isNullOrBlank()) return ""
-        val idx = cleaned.lowercase().indexOf(country.lowercase())
-        val candidate = when {
-            idx > 0 -> cleaned.substring(0, idx).trim(' ', '-', '|', '·', ',')
-            idx == 0 -> cleaned.substring(country.length).trim(' ', '-', '|', '·', ',')
-            else -> return ""
+        val cleaned = stripDecoration(remark).trim()
+        if (cleaned.isEmpty()) return ""
+
+        val withoutCountry = if (country.isNullOrBlank()) {
+            cleaned
+        } else {
+            cleaned.replace(country, "", ignoreCase = true)
         }
-        return candidate.takeIf { it.length in 2..24 && it.none { ch -> ch.isDigit() } }.orEmpty()
+
+        val candidate = withoutCountry
+            .replace(Regex("\\s+"), " ")
+            .trim(' ', '-', '|', '·', ',', '#', '_', '.', '/', '\\')
+            .trim()
+
+        // Reject anything that is not plausibly a place name: too short, too
+        // long, purely numeric, or nothing but the country repeated.
+        if (candidate.length !in 2..28) return ""
+        if (candidate.none { it.isLetter() }) return ""
+        if (candidate.equals(country, ignoreCase = true)) return ""
+        // A bare server index such as "01" is not a city.
+        if (candidate.all { it.isDigit() || it == ' ' }) return ""
+
+        return candidate
     }
 
     /** Drops the flag, digits, and separator noise so a city name can be found. */

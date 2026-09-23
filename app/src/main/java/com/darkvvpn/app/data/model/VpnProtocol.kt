@@ -3,27 +3,35 @@ package com.darkvvpn.app.data.model
 /**
  * The outbound protocol a [VpnServer] speaks.
  *
- * [uriScheme] is the share-link scheme the protocol is distributed under, and
- * [isXrayNative] records whether Xray-core can dial this protocol directly. The
- * two exceptions are documented on each entry; everything else is rendered as
- * an Xray outbound by [com.darkvvpn.app.xray.XrayConfigBuilder].
+ * [uriScheme] is the share-link scheme the protocol is distributed under.
+ * [xrayProtocol] is the name Xray expects in an outbound's `protocol` field —
+ * they are **not** always the same string: Shadowsocks is shared as `ss://` but
+ * Xray calls the outbound `shadowsocks`, and emitting the scheme there makes the
+ * core reject the config at startup.
+ *
+ * [isXrayNative] records whether Xray can dial the protocol at all. The
+ * exception is documented on its entry; everything else is rendered as an Xray
+ * outbound by [com.darkvvpn.app.xray.XrayConfigBuilder].
  */
 enum class VpnProtocol(
     val label: String,
     val defaultPort: Int,
     val uriScheme: String,
+    val xrayProtocol: String,
     val isXrayNative: Boolean = true,
 ) {
-    VLESS("VLESS", 443, "vless"),
-    VMESS("VMess", 443, "vmess"),
-    TROJAN("Trojan", 443, "trojan"),
-    SHADOWSOCKS("Shadowsocks", 8388, "ss"),
+    VLESS("VLESS", 443, "vless", "vless"),
+    VMESS("VMess", 443, "vmess", "vmess"),
+    TROJAN("Trojan", 443, "trojan", "trojan"),
+
+    /** Shared as `ss://`, but Xray's outbound is spelled out in full. */
+    SHADOWSOCKS("Shadowsocks", 8388, "ss", "shadowsocks"),
 
     /**
      * Xray has a native `wireguard` outbound, so a node distributed as a
      * WireGuard profile still travels through the same config builder.
      */
-    WIREGUARD("WireGuard", 51820, "wireguard"),
+    WIREGUARD("WireGuard", 51820, "wireguard", "wireguard"),
 
     /**
      * Hysteria2 is QUIC-based and has **no** Xray outbound. It is parsed and
@@ -31,14 +39,14 @@ enum class VpnProtocol(
      * dial — [isXrayNative] is false and the config builder marks it as
      * unsupported rather than emitting a config the core would reject.
      */
-    HYSTERIA2("Hysteria2", 443, "hysteria2", isXrayNative = false),
+    HYSTERIA2("Hysteria2", 443, "hysteria2", "", isXrayNative = false),
 
     /**
      * SOCKS/HTTP proxies are commonly embedded in subscription lists even when
      * the main node is something else; Xray dials both.
      */
-    SOCKS("SOCKS", 1080, "socks"),
-    HTTP("HTTP", 8080, "http"),
+    SOCKS("SOCKS", 1080, "socks", "socks"),
+    HTTP("HTTP", 8080, "http", "http"),
     ;
 
     companion object {

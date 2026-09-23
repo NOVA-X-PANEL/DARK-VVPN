@@ -84,10 +84,15 @@ internal object LinkText {
         return link.substring(0, idx) to decode(link.substring(idx + 1))
     }
 
-    /** Last path segment of a WS/HTTP path, `?ed=2048` and friends stripped. */
-    fun normalisePath(path: String?): String? {
-        if (path.isNullOrBlank()) return null
-        val withoutQuery = path.substringBefore('?')
+    /**
+     * Normalises a WS/HTTP path to a leading-slash form, defaulting to root.
+     *
+     * Total by design: every branch returns a usable path, so a caller never has
+     * to decide what "no path" means. `?ed=2048` and similar suffixes are part of
+     * the query and are dropped, because Xray expects the bare path.
+     */
+    fun normalisePath(path: String?): String {
+        val withoutQuery = path?.substringBefore('?').orEmpty()
         return when {
             withoutQuery.isEmpty() -> "/"
             withoutQuery.startsWith("/") -> withoutQuery
