@@ -1,0 +1,41 @@
+# Built by Gradle
+.gradle/
+build/
+app/build/
+
+# Local configuration — never commit these
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.navigation/
+
+# macOS
+.DS_Store
+
+# Captures / profiling
+captures/
+*.hprof
+*.trace
+
+# NDK
+.externalNativeBuild/
+.cxx/
+
+# Signing artefacts
+*.apk
+*.aab
+*.ap_
+*.dex
+output.json
+
+# Logs and temporary files
+*.log
+*.tmp

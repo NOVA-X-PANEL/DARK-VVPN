@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Never back up locally stored credentials or the session token. -->
+    <exclude domain="sharedpref" path="darkvvpn_secure.xml" />
+    <exclude domain="file" path="datastore/" />
+</full-backup-content>
