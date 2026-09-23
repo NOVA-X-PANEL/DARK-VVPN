@@ -11,6 +11,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        In-app updates: the manifest permission is required for the package
+        installer to accept the intent at all on API 26+. The user still has to
+        grant "install unknown apps" per source app; UpdateInstaller checks that
+        separately and offers to open the settings screen.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".DarkVvpnApplication"
         android:allowBackup="true"
@@ -32,7 +40,39 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+                Lets a subscription or share link be opened straight into the app,
+                which is how most users actually import one.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="darkvvpn" />
+                <data android:scheme="vless" />
+                <data android:scheme="vmess" />
+                <data android:scheme="trojan" />
+                <data android:scheme="ss" />
+                <data android:scheme="hysteria2" />
+            </intent-filter>
         </activity>
+
+        <!--
+            Serves the downloaded update APK to the package installer as a
+            content:// URI. A file:// URI throws FileUriExposedException on
+            API 24+ and leaks the private path besides; the provider is not
+            exported and grants read access per-intent only.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!--
             The VPN service is the entry point Android uses to build the tun

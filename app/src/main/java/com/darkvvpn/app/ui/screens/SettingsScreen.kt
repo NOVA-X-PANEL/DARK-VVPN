@@ -17,8 +17,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -36,6 +40,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    var showRefreshIntervalDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -54,6 +59,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
+        // ---- connection ----
         SectionHeader(title = stringResource(R.string.settings_connection))
         Spacer(Modifier.height(10.dp))
         SettingsCard {
@@ -88,6 +94,78 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
+        // ---- subscriptions ----
+        SectionHeader(title = stringResource(R.string.settings_subscriptions))
+        Spacer(Modifier.height(10.dp))
+        SettingsCard {
+            ClickableRow(
+                title = stringResource(R.string.settings_sub_refresh_hours),
+                value = if (settings.subscriptionRefreshHours <= 0) {
+                    stringResource(R.string.settings_sub_refresh_off)
+                } else {
+                    stringResource(
+                        R.string.settings_sub_refresh_hours_value,
+                        settings.subscriptionRefreshHours,
+                    )
+                },
+                onClick = { showRefreshIntervalDialog = true },
+            )
+            RowDivider()
+            SettingRow(
+                title = stringResource(R.string.settings_sub_wifi_only),
+                subtitle = "Skip scheduled refreshes on mobile data",
+                checked = settings.subscriptionRefreshOverWifiOnly,
+                onCheckedChange = viewModel::setSubscriptionWifiOnly,
+            )
+            RowDivider()
+            SettingRow(
+                title = "Merge duplicate nodes",
+                subtitle = "Replace a node in place instead of adding it twice",
+                checked = settings.mergeDuplicateNodes,
+                onCheckedChange = viewModel::setMergeDuplicateNodes,
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ---- updates ----
+        SectionHeader(title = stringResource(R.string.settings_updates))
+        Spacer(Modifier.height(10.dp))
+        SettingsCard {
+            SettingRow(
+                title = stringResource(R.string.settings_update_on_launch),
+                subtitle = "Checks quietly in the background",
+                checked = settings.checkForUpdatesOnLaunch,
+                onCheckedChange = viewModel::setCheckForUpdatesOnLaunch,
+            )
+            RowDivider()
+            SettingRow(
+                title = stringResource(R.string.settings_update_prerelease),
+                subtitle = "Offer pre-releases as well as stable versions",
+                checked = settings.allowPrereleaseUpdates,
+                onCheckedChange = viewModel::setAllowPrereleaseUpdates,
+            )
+            if (settings.skippedUpdateTag != null) {
+                RowDivider()
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        text = stringResource(
+                            R.string.settings_update_skipped,
+                            settings.skippedUpdateTag,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = viewModel::clearSkippedUpdate) {
+                        Text(stringResource(R.string.settings_update_unskip))
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ---- appearance ----
         SectionHeader(title = stringResource(R.string.settings_appearance))
         Spacer(Modifier.height(10.dp))
         SettingsCard {
@@ -108,6 +186,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
+        // ---- about ----
         SectionHeader(title = stringResource(R.string.settings_about))
         Spacer(Modifier.height(10.dp))
         SettingsCard {
@@ -124,6 +203,49 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(32.dp))
     }
+
+    if (showRefreshIntervalDialog) {
+        RefreshIntervalDialog(
+            current = settings.subscriptionRefreshHours,
+            onSelect = {
+                viewModel.setSubscriptionRefreshHours(it)
+                showRefreshIntervalDialog = false
+            },
+            onDismiss = { showRefreshIntervalDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun RefreshIntervalDialog(
+    current: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val options = listOf(0, 1, 3, 6, 12, 24, 48, 168)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_sub_refresh_hours)) },
+        text = {
+            Column {
+                options.forEach { hours ->
+                    val label = if (hours == 0) {
+                        stringResource(R.string.settings_sub_refresh_off)
+                    } else {
+                        stringResource(R.string.settings_sub_refresh_hours_value, hours)
+                    }
+                    ClickableRow(
+                        title = label,
+                        value = if (hours == current) "✓" else "",
+                        onClick = { onSelect(hours) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+        },
+    )
 }
 
 @Composable
@@ -173,6 +295,30 @@ private fun SettingRow(
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ClickableRow(title: String, value: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        TextButton(onClick = onClick) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

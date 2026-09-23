@@ -19,12 +19,39 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     val settings: StateFlow<AppSettings> = repository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
+    // ---- connection ----------------------------------------------------
     fun setAutoConnect(enabled: Boolean) = launch { repository.setAutoConnect(enabled) }
     fun setKillSwitch(enabled: Boolean) = launch { repository.setKillSwitch(enabled) }
-    fun setForceDarkTheme(enabled: Boolean) = launch { repository.setForceDarkTheme(enabled) }
-    fun setDynamicColor(enabled: Boolean) = launch { repository.setDynamicColor(enabled) }
     fun setSortByPing(enabled: Boolean) = launch { repository.setSortByPing(enabled) }
     fun setBlockAds(enabled: Boolean) = launch { repository.setBlockAds(enabled) }
+
+    // ---- appearance ----------------------------------------------------
+    fun setForceDarkTheme(enabled: Boolean) = launch { repository.setForceDarkTheme(enabled) }
+    fun setDynamicColor(enabled: Boolean) = launch { repository.setDynamicColor(enabled) }
+
+    // ---- subscriptions -------------------------------------------------
+    fun setSubscriptionRefreshHours(hours: Int) = launch {
+        repository.setSubscriptionRefreshHours(hours)
+    }
+
+    fun setSubscriptionWifiOnly(enabled: Boolean) = launch {
+        repository.setSubscriptionWifiOnly(enabled)
+    }
+
+    fun setMergeDuplicateNodes(enabled: Boolean) = launch {
+        repository.setMergeDuplicateNodes(enabled)
+    }
+
+    // ---- updates -------------------------------------------------------
+    fun setCheckForUpdatesOnLaunch(enabled: Boolean) = launch {
+        repository.setCheckForUpdatesOnLaunch(enabled)
+    }
+
+    fun setAllowPrereleaseUpdates(enabled: Boolean) = launch {
+        repository.setAllowPrereleaseUpdates(enabled)
+    }
+
+    fun clearSkippedUpdate() = launch { repository.setSkippedUpdateTag(null) }
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

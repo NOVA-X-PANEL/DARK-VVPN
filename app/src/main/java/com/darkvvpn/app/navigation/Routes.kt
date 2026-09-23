@@ -1,6 +1,7 @@
 package com.darkvvpn.app.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
@@ -12,6 +13,7 @@ object Routes {
     const val SPLASH = "splash"
     const val HOME = "home"
     const val SERVERS = "servers"
+    const val SUBSCRIPTIONS = "subscriptions"
     const val SETTINGS = "settings"
 }
 
@@ -23,5 +25,6 @@ enum class TopLevelDestination(
 ) {
     HOME(Routes.HOME, R.string.nav_home, Icons.Filled.Shield),
     SERVERS(Routes.SERVERS, R.string.nav_servers, Icons.Filled.Public),
+    SUBSCRIPTIONS(Routes.SUBSCRIPTIONS, R.string.nav_subs, Icons.Filled.Cloud),
     SETTINGS(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
 }

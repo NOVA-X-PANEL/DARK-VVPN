@@ -4,7 +4,74 @@
     <!-- Navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_servers">Servers</string>
+    <string name="nav_subs">Subs</string>
     <string name="nav_settings">Settings</string>
+
+    <!-- Subscriptions -->
+    <string name="subs_title">Subscriptions</string>
+    <string name="subs_add">Add subscription</string>
+    <string name="subs_empty">No subscriptions yet</string>
+    <string name="subs_no_nodes">Add a subscription or import share links to get started.</string>
+    <string name="subs_node_count">%1$d nodes from subscriptions</string>
+    <string name="subs_import_links">Import share links</string>
+    <string name="subs_import_links_title">Import share links</string>
+    <string name="subs_import_links_help">Paste one share link per line. Base64 subscription blobs are decoded automatically. Supported: vless, vmess, trojan, ss, hysteria2, socks.</string>
+    <string name="subs_refresh">Refresh</string>
+    <string name="subs_refresh_all">Refresh all</string>
+    <string name="subs_delete_title">Remove subscription?</string>
+    <string name="subs_delete_body">\"%1$s\" and its nodes will be removed. Your imported nodes are kept.</string>
+    <string name="subs_url_label">Subscription URL</string>
+    <string name="subs_name_label">Name</string>
+    <string name="subs_name_optional">Optional — defaults to the host</string>
+    <string name="subs_auto_update">Auto-update</string>
+    <string name="subs_enabled">Enabled</string>
+    <string name="subs_status_ok">%1$d nodes · %2$s</string>
+    <string name="subs_status_never">Not fetched yet</string>
+    <string name="subs_quota">%1$s of %2$s used</string>
+    <string name="subs_preview">Found %1$d nodes · %2$s</string>
+    <string name="subs_preview_more">and %1$d more…</string>
+    <string name="subs_updated_ago">Updated %1$s</string>
+
+    <!-- Import from a share link opened via intent -->
+    <string name="import_intent_title">Import this link?</string>
+    <string name="import_intent_confirm">Import</string>
+
+    <!-- Update -->
+    <string name="update_available_title">Update available</string>
+    <string name="update_installed">Installed</string>
+    <string name="update_latest">Latest</string>
+    <string name="update_download">Download update</string>
+    <string name="update_installing">Installing…</string>
+    <string name="update_install_now">Install now</string>
+    <string name="update_later">Later</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_uptodate">DARK VVPN is up to date (%1$s).</string>
+    <string name="update_verified">Integrity verified (SHA-256)</string>
+    <string name="update_unverified">Downloaded, but this release publishes no checksum — install only if you trust the source.</string>
+    <string name="update_need_permission">Allow \"Install unknown apps\" for DARK VVPN, then return here.</string>
+    <string name="update_open_settings">Open settings</string>
+    <string name="update_release_notes">Release notes</string>
+    <string name="update_check_now">Check for updates</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+
+    <!-- Settings: subscriptions & updates -->
+    <string name="settings_subscriptions">Subscriptions</string>
+    <string name="settings_sub_refresh_hours">Auto-refresh interval</string>
+    <string name="settings_sub_refresh_hours_value">Every %1$d hours</string>
+    <string name="settings_sub_refresh_off">Never</string>
+    <string name="settings_sub_wifi_only">Refresh on Wi-Fi only</string>
+    <string name="settings_updates">Updates</string>
+    <string name="settings_update_on_launch">Check for updates on launch</string>
+    <string name="settings_update_prerelease">Include pre-releases</string>
+    <string name="settings_update_skipped">A skipped version is being hidden</string>
+    <string name="settings_update_unskip">Show skipped versions again</string>
+
+    <!-- Protocol detail -->
+    <string name="protocol_security">Security</string>
+    <string name="protocol_transport">Transport</string>
+    <string name="protocol_flow">Flow</string>
+    <string name="protocol_reality_unsupported">REALITY needs a public key and SNI on the server.</string>
 
     <!-- Home -->
     <string name="home_title">DARK VVPN</string>
@@ -44,6 +111,11 @@
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_retry">Retry</string>
+    <string name="action_add">Add</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_import">Import</string>
+    <string name="action_test">Test</string>
+    <string name="action_close">Close</string>
 
     <!-- Notification -->
     <string name="notif_channel_name">VPN status</string>

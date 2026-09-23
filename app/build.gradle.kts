@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -39,6 +40,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // java.time is used by the update checker's date parsing and is API 26+;
+        // desugaring back-ports it to the minSdk 24 floor without a second
+        // date library, and the release notes parser needs it too.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -76,12 +81,17 @@ dependencies {
 
     // Persistence
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.kotlinx.serialization.json)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // Back-ports java.time to API 24 (used by the update checker)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Never back up locally stored credentials or the session token. -->
+    <!--
+        Subscription URLs routinely embed an access token, and the node list is
+        a credential set in its own right. None of it belongs in a cloud backup
+        or a device transfer, so both stores are excluded by name.
+    -->
+    <exclude domain="file" path="datastore/darkvvpn_subscriptions.preferences_pb" />
+    <exclude domain="file" path="datastore/darkvvpn_settings.preferences_pb" />
     <exclude domain="sharedpref" path="darkvvpn_secure.xml" />
-    <exclude domain="file" path="datastore/" />
 </full-backup-content>
