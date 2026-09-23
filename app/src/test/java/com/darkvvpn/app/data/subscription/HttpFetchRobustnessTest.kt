@@ -108,9 +108,14 @@ class HttpFetchRobustnessTest {
     }
 
     @Test
-    fun `a body that merely starts with an angle bracket is left alone`() {
-        // Guarding against an over-eager rule: only an actual document is markup.
-        assertFalse(ResponseClassifier.looksLikeMarkup("<not html, just text"))
+    fun `any leading angle bracket means a document, whatever it says`() {
+        // Deliberately broad. A subscription body never starts with '<', so a
+        // false positive is impossible, while the narrower "does it mention html"
+        // rule would let a fragment such as "<div>" through to the parser and
+        // produce the very message this classifier exists to replace.
+        assertTrue(ResponseClassifier.looksLikeMarkup("<div>"))
+        assertTrue(ResponseClassifier.looksLikeMarkup("<not a document, just text"))
+        assertTrue(ResponseClassifier.looksLikeMarkup("   \n <body>"))
     }
 
     // ------------------------------------------------------------------

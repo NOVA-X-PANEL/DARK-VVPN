@@ -384,13 +384,13 @@ internal object ResponseClassifier {
      * is told their subscription "contains no usable nodes" when the truth is
      * that the URL expired or is behind auth.
      */
-    fun looksLikeMarkup(text: String): Boolean {
-        val head = text.trimStart().take(64).lowercase()
-        return head.startsWith("<!doctype") ||
-            head.startsWith("<html") ||
-            head.startsWith("<?xml") ||
-            (head.startsWith("<") && head.contains("html"))
-    }
+    fun looksLikeMarkup(text: String): Boolean =
+        // A subscription body never starts with '<': a share link begins with a
+        // scheme letter and a base64 blob begins with a letter or a digit. So the
+        // presence of a leading angle bracket is conclusive, and the simpler rule
+        // catches fragments such as "<div>…" that a narrower "does it mention
+        // html" test would miss and pass to the parser.
+        text.trimStart().startsWith("<")
 
     /** Turns an HTTP status into something the user can act on. */
     fun describeHttpFailure(code: Int): String = when (code) {

@@ -101,10 +101,13 @@ class AppStartupTest {
         assertEquals(1, repository.servers.value.size)
         assertEquals("From sub", repository.servers.value.single().name)
 
-        // Dropping the subscription leaves nothing behind, because the manual
-        // entry was the one it superseded.
+        // Dropping the subscription brings the manual entry BACK. This is the
+        // guarantee the imported/subscription split exists for: a refresh, or the
+        // removal of a subscription, must never be able to delete a node the user
+        // pasted by hand.
         repository.clearSubscriptionNodes()
-        assertTrue(repository.servers.value.isEmpty())
+        assertEquals(1, repository.servers.value.size)
+        assertEquals("Test", repository.servers.value.single().name)
     }
 
     @Test
