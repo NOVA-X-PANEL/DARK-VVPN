@@ -136,6 +136,7 @@ object XrayConfigBuilder {
                     // ORDER MATTERS: Xray stops at the first matching rule, so
                     // every specific rule must precede the catch-all. Putting the
                     // catch-all first would silently disable the ad blocker.
+                    /*
                     if (blockAds) {
                         add(buildJsonObject {
                             put("type", "field")
@@ -145,6 +146,7 @@ object XrayConfigBuilder {
                             }
                         })
                     }
+                    */
 
                     // Loopback and link-local traffic stays off the tunnel, so a
                     // LAN device (a printer, a NAS) is still reachable.
@@ -152,7 +154,12 @@ object XrayConfigBuilder {
                         put("type", "field")
                         put("outboundTag", OUTBOUND_TAG_DIRECT)
                         putJsonArray("ip") {
-                            add("geoip:private")
+                            add("10.0.0.0/8")
+                            add("127.0.0.0/8")
+                            add("172.16.0.0/12")
+                            add("192.168.0.0/16")
+                            add("fc00::/7")
+                            add("fe80::/10")
                         }
                     })
 

@@ -13,7 +13,7 @@
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.12-4285F4?logo=jetpackcompose&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
-**[⬇ Download the latest APK](https://github.com/NOVA-X-PANEL/DARK-VVPN/releases/latest)** — debug build, ready to sideload.
+**[⬇ Download the latest APK](https://github.com/NOVA-X-PANEL/DARK-VVPN/releases)** — debug build, ready to sideload.
 
 </div>
 
