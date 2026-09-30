@@ -70,8 +70,19 @@ object XrayConfigBuilder {
     const val TUN_PREFIX_LENGTH = 30
     const val TUN_MTU = 1500
 
+    const val TUN_CLIENT_IPV6 = "fdfe:dcba:9876::2"
+    const val TUN_GATEWAY_IPV6 = "fdfe:dcba:9876::1"
+    const val TUN_PREFIX_LENGTH_IPV6 = 64
+
     /** Resolver the device is told to use; queries travel through the tunnel. */
-    val TUN_DNS_SERVERS = listOf("1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4")
+    val TUN_DNS_SERVERS = listOf(
+        "1.1.1.1",
+        "1.0.0.1",
+        "8.8.8.8",
+        "8.8.4.4",
+        "2606:4700:4700::1111",
+        "2001:4860:4860::8888",
+    )
 
     private fun isPureIp(value: String): Boolean {
         val clean = value.trim('[', ']')
@@ -131,7 +142,6 @@ object XrayConfigBuilder {
                     add("https://8.8.8.8/dns-query")
                     add("1.1.1.1")
                     add("8.8.8.8")
-                    add("localhost")
                 }
                 put("queryStrategy", "UseIP")
             }
@@ -333,7 +343,10 @@ object XrayConfigBuilder {
             put("userLevel", 8)
             // Must fall inside the same prefix as the address Android is given,
             // or the netstack has no reachable gateway and every flow stalls.
-            putJsonArray("gateway") { add(TUN_GATEWAY) }
+            putJsonArray("gateway") {
+                add(TUN_GATEWAY)
+                add(TUN_GATEWAY_IPV6)
+            }
         }
         putJsonObject("sniffing") {
             put("enabled", true)

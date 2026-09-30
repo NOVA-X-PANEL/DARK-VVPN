@@ -82,7 +82,7 @@ class XrayConfigBuilderTest {
 
         // The gateway must be the counterpart of the address Android is handed.
         val gateways = settings["gateway"]!!.jsonArray.map { it.jsonPrimitive.content }
-        assertEquals(listOf(XrayConfigBuilder.TUN_GATEWAY), gateways)
+        assertEquals(listOf(XrayConfigBuilder.TUN_GATEWAY, XrayConfigBuilder.TUN_GATEWAY_IPV6), gateways)
 
         // autoSystemRoutingTable rewrites the host table and needs root on
         // Android; VpnService owns routing instead.
@@ -97,6 +97,11 @@ class XrayConfigBuilderTest {
         val gateway = XrayConfigBuilder.TUN_GATEWAY
         assertEquals(client.substringBeforeLast('.'), gateway.substringBeforeLast('.'))
         assertEquals(30, XrayConfigBuilder.TUN_PREFIX_LENGTH)
+
+        val clientV6 = XrayConfigBuilder.TUN_CLIENT_IPV6
+        val gatewayV6 = XrayConfigBuilder.TUN_GATEWAY_IPV6
+        assertEquals(clientV6.substringBeforeLast(':'), gatewayV6.substringBeforeLast(':'))
+        assertEquals(64, XrayConfigBuilder.TUN_PREFIX_LENGTH_IPV6)
     }
 
     @Test

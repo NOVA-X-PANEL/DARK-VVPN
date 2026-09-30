@@ -134,9 +134,12 @@ class UpdateDownloader(
             sources.add(DownloadSource(originalUrl, tunnelProxy, "VPN Tunnel"))
         }
 
-        // 2. High-speed Cloudflare-accelerated CDN mirror (fast & unthrottled in Iran)
-        sources.add(DownloadSource("https://gh-proxy.com/$originalUrl", null, "Cloudflare CDN Mirror"))
-        sources.add(DownloadSource("https://ghproxy.net/$originalUrl", null, "Mirror (ghproxy.net)"))
+        // 2. High-speed Cloudflare-accelerated CDN mirror (fast & unthrottled in Iran).
+        // SECURITY: only queried if expected SHA-256 is present, preventing untrusted mirror tampering.
+        if (!expected.isNullOrBlank()) {
+            sources.add(DownloadSource("https://gh-proxy.com/$originalUrl", null, "Cloudflare CDN Mirror"))
+            sources.add(DownloadSource("https://ghproxy.net/$originalUrl", null, "Mirror (ghproxy.net)"))
+        }
 
         // 3. Direct GitHub as fallback
         sources.add(DownloadSource(originalUrl, null, "Direct GitHub"))
@@ -181,10 +184,17 @@ class UpdateDownloader(
                     scope.coroutineContext.ensureActive()
 
                     val actualHex = computeFileSha256(partial)
-                    if (expected != null && actualHex != expected.lowercase()) {
-                        Log.e(TAG, "Digest mismatch on ${source.description}: expected=$expected actual=$actualHex")
+                    if (expected != null) {
+                        if (actualHex != expected.lowercase()) {
+                            Log.e(TAG, "Digest mismatch on ${source.description}: expected=$expected actual=$actualHex")
+                            partial.delete()
+                            lastError = "Digest verification failed on ${source.description}"
+                            continue
+                        }
+                    } else if (source.description.contains("Mirror", ignoreCase = true)) {
+                        Log.e(TAG, "Refusing unverified APK from untrusted mirror: ${source.description}")
                         partial.delete()
-                        lastError = "Digest verification failed on ${source.description}"
+                        lastError = "Unverified mirror download rejected"
                         continue
                     }
 

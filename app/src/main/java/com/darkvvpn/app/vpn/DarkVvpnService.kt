@@ -181,11 +181,16 @@ class DarkVvpnService : VpnService() {
             .setMtu(XrayConfigBuilder.TUN_MTU)
             .addAddress(XrayConfigBuilder.TUN_CLIENT_ADDRESS, XrayConfigBuilder.TUN_PREFIX_LENGTH)
 
+        // Assign IPv6 address to prevent IPv6 traffic from bypassing the VPN tunnel
+        runCatching {
+            builder.addAddress(XrayConfigBuilder.TUN_CLIENT_IPV6, XrayConfigBuilder.TUN_PREFIX_LENGTH_IPV6)
+        }.onFailure { Log.w(TAG, "IPv6 TUN address assignment not supported on this device", it) }
+
         // Full tunnel: every destination, v4 and v6, goes through the tun.
         builder.addRoute("0.0.0.0", 0)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            runCatching { builder.addRoute("::", 0) }
-        }
+        runCatching {
+            builder.addRoute("::", 0)
+        }.onFailure { Log.w(TAG, "IPv6 default route not supported on this device", it) }
 
         XrayConfigBuilder.TUN_DNS_SERVERS.forEach { server ->
             runCatching { builder.addDnsServer(server) }
