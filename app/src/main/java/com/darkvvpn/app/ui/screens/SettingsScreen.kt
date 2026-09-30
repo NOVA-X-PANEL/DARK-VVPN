@@ -1,5 +1,6 @@
 package com.darkvvpn.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -245,6 +247,31 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
+        // ---- language ----
+        SectionHeader(title = stringResource(R.string.settings_language))
+        Spacer(Modifier.height(10.dp))
+        SettingsCard {
+            RadioOptionRow(
+                title = stringResource(R.string.settings_language_system),
+                selected = settings.language == "system",
+                onClick = { viewModel.setLanguage("system") },
+            )
+            RowDivider()
+            RadioOptionRow(
+                title = stringResource(R.string.settings_language_fa),
+                selected = settings.language == "fa",
+                onClick = { viewModel.setLanguage("fa") },
+            )
+            RowDivider()
+            RadioOptionRow(
+                title = stringResource(R.string.settings_language_en),
+                selected = settings.language == "en",
+                onClick = { viewModel.setLanguage("en") },
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
         // ---- about ----
         SectionHeader(title = stringResource(R.string.settings_about))
         Spacer(Modifier.height(10.dp))
@@ -446,6 +473,32 @@ private fun InfoRow(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun RadioOptionRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
         )
     }
 }

@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 
@@ -152,25 +155,52 @@ class ServerRepository {
         // This validates TLS handshake, routing, and end-to-end connectivity.
         val configResult = XrayConfigBuilder.build(server)
         if (configResult is XrayConfigResult.Success) {
-            try {
-                val delay = Libv2ray.measureOutboundDelay(
-                    configResult.rendered,
-                    "https://cp.cloudflare.com/generate_204",
-                )
-                if (delay > 0) return@withContext delay.toInt()
-            } catch (t: Throwable) {
-                // Catch UnsatisfiedLinkError during unit tests, or handshake failure.
+            val testUrls = listOf(
+                "https://www.google.com/generate_204",
+                "https://cp.cloudflare.com/generate_204",
+            )
+            for (testUrl in testUrls) {
+                try {
+                    val delay = Libv2ray.measureOutboundDelay(configResult.rendered, testUrl)
+                    if (delay > 0) return@withContext delay.toInt()
+                } catch (t: Throwable) {
+                    // Catch UnsatisfiedLinkError during unit tests, or core error.
+                }
             }
         }
 
-        // 2. Fallback: direct TCP connect probe.
-        if (server.protocol == VpnProtocol.HYSTERIA2) return@withContext null
-        try {
+        // 2. Fallback: socket probe.
+        if (server.protocol == VpnProtocol.HYSTERIA2) {
+            return@withContext probeUdp(host, port) ?: -1
+        }
+
+        return@withContext probeTcp(host, port) ?: -1
+    }
+
+    private fun probeTcp(host: String, port: Int): Int? {
+        return try {
             Socket().use { socket ->
                 val start = System.nanoTime()
                 socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
                 val elapsed = (System.nanoTime() - start) / 1_000_000
                 elapsed.toInt().coerceAtLeast(0)
+            }
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    private fun probeUdp(host: String, port: Int): Int? {
+        return try {
+            val start = System.nanoTime()
+            DatagramSocket().use { socket ->
+                socket.soTimeout = PROBE_TIMEOUT_MS
+                val address = InetAddress.getByName(host)
+                val buf = ByteArray(1) { 0x00 }
+                val packet = DatagramPacket(buf, buf.size, address, port)
+                socket.send(packet)
+                val elapsed = (System.nanoTime() - start) / 1_000_000
+                elapsed.toInt().coerceAtLeast(1)
             }
         } catch (t: Throwable) {
             null
@@ -225,8 +255,8 @@ class ServerRepository {
         private const val TAG = "ServerRepository"
 
         /** Enough parallelism to finish a long list quickly, few enough to be polite. */
-        private const val MAX_CONCURRENT_PROBES = 12
+        private const val MAX_CONCURRENT_PROBES = 5
 
-        private const val PROBE_TIMEOUT_MS = 3_000
+        private const val PROBE_TIMEOUT_MS = 2_500
     }
 }

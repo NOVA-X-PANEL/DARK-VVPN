@@ -55,6 +55,7 @@ class FormattersTest {
     @Test
     fun `ping renders a dash when the probe has not run`() {
         assertEquals("—", Formatters.ping(null))
+        assertEquals("Timeout", Formatters.ping(-1))
         assertEquals("37 ms", Formatters.ping(37))
     }
 }

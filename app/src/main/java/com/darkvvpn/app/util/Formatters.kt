@@ -43,6 +43,10 @@ object Formatters {
         }
     }
 
-    /** `42 ms`, or `—` when unknown. */
-    fun ping(ms: Int?): String = ms?.let { "$it ms" } ?: "—"
+    /** `42 ms`, `Timeout`, or `—` when unknown. */
+    fun ping(ms: Int?): String = when {
+        ms == null -> "—"
+        ms < 0 -> "Timeout"
+        else -> "$ms ms"
+    }
 }

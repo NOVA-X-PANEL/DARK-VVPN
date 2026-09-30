@@ -29,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val KILL_SWITCH = booleanPreferencesKey("kill_switch")
         val FORCE_DARK = booleanPreferencesKey("force_dark_theme")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val LANGUAGE = stringPreferencesKey("app_language")
         val LAST_SERVER = stringPreferencesKey("last_server_id")
         val SORT_BY_PING = booleanPreferencesKey("sort_by_ping")
         val BLOCK_ADS = booleanPreferencesKey("block_ads")
@@ -57,6 +58,7 @@ class SettingsRepository(private val context: Context) {
             lastServerId = prefs[Keys.LAST_SERVER],
             forceDarkTheme = prefs[Keys.FORCE_DARK] ?: defaults.forceDarkTheme,
             dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: defaults.dynamicColor,
+            language = prefs[Keys.LANGUAGE] ?: defaults.language,
             subscriptionRefreshHours = prefs[Keys.SUB_REFRESH_HOURS] ?: defaults.subscriptionRefreshHours,
             subscriptionRefreshOverWifiOnly = prefs[Keys.SUB_WIFI_ONLY] ?: defaults.subscriptionRefreshOverWifiOnly,
             subscriptionUserAgent = prefs[Keys.SUB_USER_AGENT] ?: defaults.subscriptionUserAgent,
@@ -80,6 +82,9 @@ class SettingsRepository(private val context: Context) {
     // ---- appearance ----------------------------------------------------
     suspend fun setForceDarkTheme(enabled: Boolean) = put(Keys.FORCE_DARK, enabled)
     suspend fun setDynamicColor(enabled: Boolean) = put(Keys.DYNAMIC_COLOR, enabled)
+    suspend fun setLanguage(language: String) {
+        context.settingsStore.edit { it[Keys.LANGUAGE] = language }
+    }
 
     // ---- subscriptions -------------------------------------------------
     suspend fun setSubscriptionRefreshHours(hours: Int) {

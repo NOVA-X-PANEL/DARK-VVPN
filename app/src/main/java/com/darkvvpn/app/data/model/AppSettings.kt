@@ -12,6 +12,7 @@ data class AppSettings(
     // ---- appearance -----------------------------------------------------
     val forceDarkTheme: Boolean = true,
     val dynamicColor: Boolean = false,
+    val language: String = "system", // "system", "fa", "en"
 
     // ---- subscriptions --------------------------------------------------
     /** Hours between automatic subscription refreshes; 0 disables them. */

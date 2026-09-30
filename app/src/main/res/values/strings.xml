@@ -114,11 +114,16 @@
     <string name="servers_empty_action">Add a subscription</string>
     <string name="servers_no_match_title">No match</string>
     <string name="servers_no_match_body">No server matches that search.</string>
+    <string name="servers_ping_timeout">Timeout</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_connection">Connection</string>
     <string name="settings_appearance">Appearance</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_fa">فارسی (Persian)</string>
+    <string name="settings_language_en">English</string>
     <string name="settings_about">About</string>
     <string name="settings_auto_connect">Auto-connect on launch</string>
     <string name="settings_kill_switch">Kill switch</string>

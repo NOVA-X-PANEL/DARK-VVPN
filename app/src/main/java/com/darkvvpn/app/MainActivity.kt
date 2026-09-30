@@ -21,12 +21,17 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection
+import java.util.Locale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,11 +63,32 @@ class MainActivity : ComponentActivity() {
             val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
             val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
 
-            DarkVvpnTheme(
-                darkTheme = settings.forceDarkTheme,
-                dynamicColor = settings.dynamicColor,
+            val locale = when (settings.language) {
+                "fa" -> Locale("fa")
+                "en" -> Locale("en")
+                else -> Locale.getDefault()
+            }
+            val layoutDirection = if (locale.language == "fa") LayoutDirection.Rtl else LayoutDirection.Ltr
+
+            val context = LocalContext.current
+            val customContext = remember(locale, context) {
+                val config = android.content.res.Configuration(context.resources.configuration).apply {
+                    setLocale(locale)
+                    setLayoutDirection(locale)
+                }
+                context.createConfigurationContext(config)
+            }
+
+            CompositionLocalProvider(
+                LocalContext provides customContext,
+                LocalLayoutDirection provides layoutDirection,
             ) {
-                DarkVvpnApp(initialPayload = sharePayloadFrom(intent))
+                DarkVvpnTheme(
+                    darkTheme = settings.forceDarkTheme,
+                    dynamicColor = settings.dynamicColor,
+                ) {
+                    DarkVvpnApp(initialPayload = sharePayloadFrom(intent))
+                }
             }
         }
     }

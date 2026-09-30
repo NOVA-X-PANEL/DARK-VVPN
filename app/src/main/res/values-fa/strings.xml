@@ -1,0 +1,162 @@
+<resources>
+    <string name="app_name">DARK VVPN</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">خانه</string>
+    <string name="nav_servers">سرورها</string>
+    <string name="nav_subs">اشتراک‌ها</string>
+    <string name="nav_settings">تنظیمات</string>
+
+    <!-- Subscriptions -->
+    <string name="subs_title">اشتراک‌ها</string>
+    <string name="subs_add">افزودن اشتراک</string>
+    <string name="subs_empty">هنوز اشتراکی ثبت نشده</string>
+    <string name="subs_no_nodes">یک لینک ساب یا کانفیگ وارد کنید تا سرورها اضافه شوند.</string>
+    <string name="subs_node_count">%1$d نود از اشتراک</string>
+    <string name="subs_import_links">وارد کردن کانفیگ</string>
+    <string name="subs_import_links_title">وارد کردن کانفیگ</string>
+    <string name="subs_import_links_help">در هر سطر یک لینک وارد کنید. کدهای ساب Base64 خودکار شناسایی می‌شوند. پروتکل‌ها: vless, vmess, trojan, ss, hysteria2, socks.</string>
+    <string name="subs_refresh">به‌روزرسانی</string>
+    <string name="subs_refresh_all">به‌روزرسانی همه</string>
+    <string name="subs_delete_title">حذف اشتراک؟</string>
+    <string name="subs_delete_body">اشتراک «%1$s» و سرورهای آن حذف خواهند شد. کانفیگ‌های دستی شما باقی می‌مانند.</string>
+    <string name="subs_url_label">آدرس اشتراک (لینک ساب)</string>
+    <string name="subs_name_label">نام اشتراک</string>
+    <string name="subs_name_optional">اختیاری — پیش‌فرض بر اساس هاست</string>
+    <string name="subs_auto_update">آپدیت خودکار</string>
+    <string name="subs_enabled">فعال</string>
+    <string name="subs_status_ok">%1$d نود · %2$s</string>
+    <string name="subs_status_never">هنوز دریافت نشده</string>
+    <string name="subs_quota">%1$s از %2$s مصرف شده</string>
+    <string name="subs_preview">%1$d نود دریافت شد · %2$s</string>
+    <string name="subs_preview_more">و %1$d مورد دیگر…</string>
+    <string name="subs_updated_ago">آخرین آپدیت: %1$s</string>
+
+    <!-- Import from a share link opened via intent -->
+    <string name="import_intent_title">وارد کردن این لینک؟</string>
+    <string name="import_intent_confirm">وارد کردن</string>
+
+    <!-- Update -->
+    <string name="update_available_title">نسخه جدید در دسترس است</string>
+    <string name="update_installed">نسخه فعلی</string>
+    <string name="update_latest">آخرین نسخه</string>
+    <string name="update_download">دانلود آپدیت</string>
+    <string name="update_installing">در حال نصب…</string>
+    <string name="update_install_now">نصب آپدیت</string>
+    <string name="update_later">بعداً</string>
+    <string name="update_skip">رد کردن این نسخه</string>
+    <string name="update_checking">در حال بررسی نسخه جدید…</string>
+    <string name="update_uptodate">برنامه به‌روز است (%1$s).</string>
+    <string name="update_verified">صحت فایل تأیید شد (SHA-256)</string>
+    <string name="update_unverified">دانلود شد، ولی چک‌سام موجود نیست — در صورت اطمینان نصب کنید.</string>
+    <string name="update_need_permission">دسترسی «نصب برنامه‌های ناشناس» را برای برنامه مجاز کنید و برگردید.</string>
+    <string name="update_open_settings">باز کردن تنظیمات</string>
+    <string name="update_release_notes">تغییرات این نسخه</string>
+    <string name="update_check_now">بررسی آپدیت</string>
+    <string name="update_downloading">در حال دانلود… %1$d٪</string>
+    <string name="update_banner_title">نسخه جدید %1$s موجود است</string>
+    <string name="update_banner_body">برای مشاهده تغییرات و نصب لمس کنید.</string>
+    <string name="update_banner_body_prerelease">نسخه پیش‌نمایش. برای جزئیات لمس کنید.</string>
+    <string name="update_banner_action">آپدیت</string>
+    <string name="update_uptodate_title">برنامه به‌روز است</string>
+    <string name="update_check_failed_title">خطا در بررسی آپدیت</string>
+    <string name="update_checking_body">در حال ارتباط با گیت‌هاب جهت دریافت اطلاعات نسخه…</string>
+    <string name="update_check_failed_hint">به دلیل اختلال موقت اینترنت یا محدودیت شبکه است. چند دقیقه بعد دوباره امتحان کنید.</string>
+
+    <!-- Settings: subscriptions & updates -->
+    <string name="settings_subscriptions">اشتراک‌ها</string>
+    <string name="settings_sub_refresh_hours">فاصله آپدیت خودکار ساب</string>
+    <string name="settings_sub_refresh_hours_value">هر %1$d ساعت</string>
+    <string name="settings_sub_refresh_off">غیرفعال</string>
+    <string name="settings_sub_wifi_only">فقط در اتصال وای‌فای</string>
+    <string name="settings_updates">به‌روزرسانی‌ها</string>
+    <string name="settings_update_on_launch">بررسی آپدیت هنگام ورود به برنامه</string>
+    <string name="settings_update_prerelease">دریافت نسخه‌های آزمایشی (Pre-release)</string>
+    <string name="settings_update_skipped">یک نسخه رد شده مخفی است</string>
+    <string name="settings_update_check_now">بررسی برای نسخه جدید</string>
+    <string name="settings_update_check_action">بررسی</string>
+    <string name="settings_update_available_short">نسخه %1$s آماده است</string>
+    <string name="settings_update_failed_short">خطا در بررسی</string>
+    <string name="settings_update_current_short">به‌روز است</string>
+    <string name="settings_update_unskip">نمایش مجدد نسخه‌های رد شده</string>
+
+    <!-- Protocol detail -->
+    <string name="protocol_security">امنیت</string>
+    <string name="protocol_transport">پروتکل انتقال</string>
+    <string name="protocol_flow">جریان (Flow)</string>
+    <string name="protocol_reality_unsupported">پروتکل REALITY نیازمند کلید عمومی و SNI سرور است.</string>
+
+    <!-- Home -->
+    <string name="home_title">DARK VVPN</string>
+    <string name="home_status_connected">متصل شد</string>
+    <string name="home_status_connecting">در حال اتصال…</string>
+    <string name="home_status_disconnecting">در حال قطع اتصال…</string>
+    <string name="home_status_disconnected">قطع است</string>
+    <string name="home_connect">اتصال</string>
+    <string name="home_disconnect">قطع اتصال</string>
+    <string name="home_selected_server">سرور انتخاب‌شده</string>
+    <string name="home_change_server">تغییر سرور</string>
+    <string name="home_download">دانلود</string>
+    <string name="home_upload">آپلود</string>
+    <string name="home_duration">مدت زمان</string>
+    <string name="home_no_server">هیچ سروری انتخاب نشده</string>
+
+    <!-- Servers -->
+    <string name="servers_title">سرورها</string>
+    <string name="servers_search_hint">جستجوی سرورها…</string>
+    <string name="servers_empty">هیچ سروری موجود نیست</string>
+    <string name="servers_ping">پینگ</string>
+    <string name="servers_select">انتخاب</string>
+    <string name="servers_count">%1$d سرور</string>
+    <string name="servers_measure">تست مجدد پینگ</string>
+    <string name="servers_empty_title">هنوز سروری اضافه نشده</string>
+    <string name="servers_empty_body">برنامه سرور پیش‌فرض ندارد. لینک اشتراک اضافه کنید تا سرورها نمایان شوند.</string>
+    <string name="servers_empty_action">افزودن اشتراک</string>
+    <string name="servers_no_match_title">موردی یافت نشد</string>
+    <string name="servers_no_match_body">سروری با این عبارت پیدا نشد.</string>
+    <string name="servers_ping_timeout">تایم‌اوت</string>
+
+    <!-- Settings -->
+    <string name="settings_title">تنظیمات</string>
+    <string name="settings_connection">اتصال</string>
+    <string name="settings_appearance">ظاهر و پوسته</string>
+    <string name="settings_language">زبان (Language)</string>
+    <string name="settings_language_system">پیش‌فرض سیستم</string>
+    <string name="settings_language_fa">فارسی (Persian)</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_about">درباره برنامه</string>
+    <string name="settings_auto_connect">اتصال خودکار هنگام اجرا</string>
+    <string name="settings_kill_switch">سوئیچ قطع اضطراری (Kill switch)</string>
+    <string name="settings_dark_theme">پوسته تیره (Dark theme)</string>
+    <string name="settings_dynamic_color">رنگ پویا بر اساس کاغذدیواری</string>
+    <string name="settings_version">نسخه برنامه</string>
+    <string name="settings_core_version">هسته ترافیک</string>
+    <string name="settings_developer">توسعه‌دهنده</string>
+
+    <!-- Diagnostics -->
+    <string name="settings_diagnostics">گزارش‌های هسته</string>
+    <string name="settings_diagnostics_empty">پیامی از هسته ثبت نشده. پس از اتصال، لاگ‌های دایال و هندشیک اینجا قرار می‌گیرند.</string>
+    <string name="settings_diagnostics_clear">پاک‌سازی</string>
+
+    <!-- Common -->
+    <string name="action_ok">تأیید</string>
+    <string name="action_cancel">لغو</string>
+    <string name="action_retry">تلاش مجدد</string>
+    <string name="action_add">افزودن</string>
+    <string name="action_remove">حذف</string>
+    <string name="action_import">وارد کردن</string>
+    <string name="action_test">آزمایش</string>
+    <string name="action_close">بستن</string>
+    <string name="connection_failed">اتصال برقرار نشد</string>
+    <string name="connection_failed_hint">این پیام تا زمان بستن نمایش داده می‌شود. می‌توانید متن را انتخاب و کپی کنید.</string>
+    <string name="servers_unsupported">پشتیبانی نمی‌شود</string>
+    <string name="servers_unsupported_hint">این نود به هسته دیگری نیاز دارد</string>
+    <string name="action_clear">پاک‌سازی</string>
+    <string name="action_dismiss">رد کردن</string>
+
+    <!-- Notification -->
+    <string name="notif_channel_name">وضعیت VPN</string>
+    <string name="notif_channel_desc">نمایش وضعیت اتصال فعلی فیلترشکن</string>
+    <string name="notif_title_connected">به DARK VVPN متصل هستید</string>
+    <string name="notif_text_connected">برای باز کردن برنامه لمس کنید</string>
+</resources>

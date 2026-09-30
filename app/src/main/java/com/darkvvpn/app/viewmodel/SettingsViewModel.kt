@@ -29,6 +29,7 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     // ---- appearance ----------------------------------------------------
     fun setForceDarkTheme(enabled: Boolean) = launch { repository.setForceDarkTheme(enabled) }
     fun setDynamicColor(enabled: Boolean) = launch { repository.setDynamicColor(enabled) }
+    fun setLanguage(language: String) = launch { repository.setLanguage(language) }
 
     // ---- subscriptions -------------------------------------------------
     fun setSubscriptionRefreshHours(hours: Int) = launch {

@@ -77,7 +77,11 @@ fun PingBadge(
                 .background(tint),
         )
         Text(
-            text = pingMs?.let { "$it ms" } ?: "—",
+            text = when {
+                pingMs == null -> "—"
+                pingMs < 0 -> stringResource(R.string.servers_ping_timeout)
+                else -> "$pingMs ms"
+            },
             style = MaterialTheme.typography.labelMedium,
             color = tint,
         )

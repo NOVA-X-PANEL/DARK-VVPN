@@ -98,8 +98,20 @@ class UpdateDownloader(
         val target = File(cacheDir, "update-${release.tag}.apk")
         val partial = File(cacheDir, "$UPDATE_FILE_PREFIX${release.tag}.apk.part")
 
-        cleanupPartials()
-        _state.value = DownloadState.Running(0L, release.apkSizeBytes)
+        // 1. If target already exists and is valid, skip download entirely
+        if (target.exists() && target.length() > 0L) {
+            val valid = expected == null || computeFileSha256(target) == expected.lowercase()
+            if (valid) {
+                val verified = expected != null
+                _state.value = DownloadState.Complete(target, verified)
+                return DownloadResult.Success(target, verified)
+            } else {
+                target.delete()
+            }
+        }
+
+        val existingBytes = if (partial.exists()) partial.length() else 0L
+        _state.value = DownloadState.Running(existingBytes, release.apkSizeBytes)
 
         var connection: HttpURLConnection? = null
         return withContext(Dispatchers.IO) {
@@ -119,36 +131,36 @@ class UpdateDownloader(
                     requestMethod = "GET"
                     setRequestProperty("Accept", "application/octet-stream")
                     setRequestProperty("User-Agent", "DARK-VVPN-updater")
+                    if (existingBytes > 0L) {
+                        setRequestProperty("Range", "bytes=$existingBytes-")
+                    }
                 }
 
                 val code = connection?.responseCode ?: -1
-                if (code !in 200..299) {
+                val isPartial = code == HttpURLConnection.HTTP_PARTIAL // 206
+                val isOk = code == HttpURLConnection.HTTP_OK // 200
+
+                if (!isPartial && !isOk) {
                     val reason = "The download failed (HTTP $code)."
                     _state.value = DownloadState.Failed(reason)
                     return@withContext DownloadResult.Failure(reason)
                 }
 
-                val declaredLength = connection?.contentLengthLong?.takeIf { it > 0L }
-                val digest = MessageDigest.getInstance("SHA-256")
-                var total = 0L
+                val resume = isPartial && existingBytes > 0L
+                val startingBytes = if (resume) existingBytes else 0L
+                val contentLen = connection?.contentLengthLong?.takeIf { it > 0L }
+                val totalExpected = if (resume && contentLen != null) startingBytes + contentLen else (contentLen ?: release.apkSizeBytes)
 
                 connection?.inputStream?.use { input ->
-                    partial.outputStream().buffered().use { output ->
-                        total = copyAndHash(input, output, digest, declaredLength, scope)
+                    java.io.FileOutputStream(partial, resume).buffered().use { output ->
+                        copyAndProgress(input, output, startingBytes, totalExpected, scope)
                     }
                 }
 
                 // An explicit cancel or scope teardown must not leave a file behind.
                 scope.coroutineContext.ensureActive()
 
-                if (declaredLength != null && total != declaredLength) {
-                    partial.delete()
-                    val reason = "The download was truncated ($total of $declaredLength bytes)."
-                    _state.value = DownloadState.Failed(reason)
-                    return@withContext DownloadResult.Failure(reason)
-                }
-
-                val actualHex = digest.digest().toHex()
+                val actualHex = computeFileSha256(partial)
 
                 if (expected != null && actualHex != expected.lowercase()) {
                     // Wrong bytes: destroy them before anything else can use them.
@@ -168,16 +180,15 @@ class UpdateDownloader(
                 }
 
                 val verified = expected != null
-                Log.i(TAG, "APK downloaded and ${if (verified) "verified" else "unverified"} ($total bytes)")
+                Log.i(TAG, "APK downloaded and ${if (verified) "verified" else "unverified"} (${target.length()} bytes)")
                 _state.value = DownloadState.Complete(target, verified)
                 DownloadResult.Success(target, verified)
             } catch (e: IOException) {
-                partial.delete()
+                // Do NOT delete partial so download can resume on the next attempt!
                 val reason = "The download was interrupted."
                 _state.value = DownloadState.Failed(reason)
                 DownloadResult.Failure(reason)
             } catch (e: Exception) {
-                partial.delete()
                 if (e is kotlinx.coroutines.CancellationException) {
                     _state.value = DownloadState.Idle
                     throw e
@@ -191,21 +202,29 @@ class UpdateDownloader(
         }
     }
 
-    /**
-     * Streams [input] to [output] while feeding [digest], reporting progress.
-     * The buffer is deliberately modest: an APK is tens of megabytes and there is
-     * no reason to hold more than a chunk of it at a time.
-     */
-    private fun copyAndHash(
+    private fun computeFileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(BUFFER_BYTES)
+        file.inputStream().buffered().use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().toHex()
+    }
+
+    private fun copyAndProgress(
         input: InputStream,
         output: OutputStream,
-        digest: MessageDigest,
-        declaredLength: Long?,
+        startingBytes: Long,
+        totalExpectedBytes: Long?,
         scope: CoroutineScope,
     ): Long {
         val buffer = ByteArray(BUFFER_BYTES)
         var total = 0L
-        var lastReported = 0L
+        var lastReported = startingBytes
 
         while (true) {
             if (!scope.coroutineContext.isActive) break
@@ -213,21 +232,14 @@ class UpdateDownloader(
             if (read <= 0) break
 
             output.write(buffer, 0, read)
-            digest.update(buffer, 0, read)
             total += read
 
-            // Throttle UI updates to ~1% granularity: a StateFlow emission per
-            // 8 KB chunk would spend more time recomposing than downloading.
-            val step = declaredLength?.let { (it / 100).coerceAtLeast(1L) } ?: (256L * 1024L)
-            if (total - lastReported >= step) {
-                lastReported = total
-                _state.update { current ->
-                    if (current is DownloadState.Running) {
-                        current.copy(bytesRead = total)
-                    } else {
-                        DownloadState.Running(total, declaredLength)
-                    }
-                }
+            val currentTotal = startingBytes + total
+            if (currentTotal - lastReported >= PROGRESS_INTERVAL_BYTES ||
+                (totalExpectedBytes != null && currentTotal == totalExpectedBytes)
+            ) {
+                _state.value = DownloadState.Running(currentTotal, totalExpectedBytes)
+                lastReported = currentTotal
             }
         }
         return total
@@ -247,6 +259,7 @@ class UpdateDownloader(
         private const val TAG = "UpdateDownloader"
         private const val UPDATE_FILE_PREFIX = "update-"
         private const val BUFFER_BYTES = 64 * 1024
+        private const val PROGRESS_INTERVAL_BYTES = 256 * 1024L
         private const val CONNECT_TIMEOUT_MS = 20_000
         private const val READ_TIMEOUT_MS = 30_000
     }
