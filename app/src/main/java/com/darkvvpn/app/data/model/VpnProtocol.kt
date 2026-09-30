@@ -37,12 +37,9 @@ enum class VpnProtocol(
     WIREGUARD("WireGuard", 51820, "wireguard", "wireguard"),
 
     /**
-     * Hysteria2 is QUIC-based and has **no** Xray outbound. It is parsed and
-     * stored so nothing is lost on import, but it needs a sing-box class core to
-     * dial — [isXrayNative] is false and the config builder marks it as
-     * unsupported rather than emitting a config the core would reject.
+     * Hysteria2 is supported natively via Xray-core 26+ (`protocol: hysteria`).
      */
-    HYSTERIA2("Hysteria2", 443, "hysteria2", "", isXrayNative = false),
+    HYSTERIA2("Hysteria2", 443, "hysteria2", "hysteria", isXrayNative = true),
 
     /**
      * SOCKS/HTTP proxies are commonly embedded in subscription lists even when
@@ -119,6 +116,7 @@ enum class VpnTransport(val wireName: String, val label: String) {
     QUIC("quic", "QUIC"),
     KCP("kcp", "mKCP"),
     XHTTP("xhttp", "XHTTP"),
+    HYSTERIA("hysteria", "Hysteria"),
     ;
 
     /** True when the transport carries a `path`/`host` pair. */

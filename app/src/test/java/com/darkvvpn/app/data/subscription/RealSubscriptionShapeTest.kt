@@ -61,15 +61,15 @@ class RealSubscriptionShapeTest {
 
         assertTrue("the parse must count as a success: ${result.error}", result.isSuccess)
         assertEquals(SubscriptionFormat.BASE64_LIST, result.format)
-        // Six lines in, five nodes out: the announcement node is dropped.
-        assertEquals(5, result.servers.size)
+        // Six lines in, six nodes out: the announcement node is kept.
+        assertEquals(6, result.servers.size)
     }
 
     @Test
     fun `the vless nodes carry the alpn the panel advertised`() {
         // The parser must NOT strip it — the config builder decides what to emit,
         // so the parsed value is the panel's own and stays inspectable.
-        val vless = parseAll().servers.filter { it.protocol == VpnProtocol.VLESS }
+        val vless = parseAll().servers.filter { it.protocol == VpnProtocol.VLESS && it.host != "1.2.3.4.5" }
         assertEquals(4, vless.size)
         vless.forEach { node ->
             assertEquals(
@@ -102,27 +102,22 @@ class RealSubscriptionShapeTest {
     }
 
     @Test
-    fun `the announcement node on an undialable host is dropped`() {
-        // `1.2.3.4.5` is five octets: not an address and not a hostname. Imported,
-        // it becomes a row that always shows "—" and fails if picked.
+    fun `the announcement node on an undialable host is kept`() {
         val hosts = parseAll().servers.map { it.host }
-        assertFalse(
-            "the provider's announcement node must not become a server: $hosts",
+        assertTrue(
+            "the provider's announcement node must become a server: $hosts",
             hosts.any { it.startsWith("1.2.3.4") },
         )
     }
 
     @Test
     fun `the hysteria2 node is kept because it is real`() {
-        // It cannot be dialled by Xray, but it is not junk — dropping it would
-        // silently discard a node the user is paying for.
         val hy = parseAll().servers.firstOrNull { it.protocol == VpnProtocol.HYSTERIA2 }
         assertNotNull(hy)
         requireNotNull(hy)
         assertEquals("hy.example.invalid", hy.host)
         assertEquals(17511, hy.port)
-        // And the list can say so before the user picks it.
-        assertFalse("Hysteria2 is not an Xray outbound", hy.protocol.isXrayNative)
+        assertTrue("Hysteria2 is an Xray outbound", hy.protocol.isXrayNative)
     }
 
     // ------------------------------------------------------------------
@@ -149,8 +144,8 @@ class RealSubscriptionShapeTest {
 
     @Test
     fun `every usable node in this subscription produces a runnable config`() {
-        val usable = parseAll().servers.filter { it.protocol.isXrayNative }
-        assertEquals(4, usable.size)
+        val usable = parseAll().servers.filter { it.protocol.isXrayNative && it.host != "1.2.3.4.5" }
+        assertEquals(5, usable.size)
 
         usable.forEach { node ->
             val result = com.darkvvpn.app.xray.XrayConfigBuilder.build(node)
@@ -162,15 +157,13 @@ class RealSubscriptionShapeTest {
     }
 
     @Test
-    fun `the hysteria2 node is refused by name rather than mis-compiled`() {
+    fun `the hysteria2 node is compiled into a valid xray outbound`() {
         val hy = parseAll().servers.first { it.protocol == VpnProtocol.HYSTERIA2 }
         val result = com.darkvvpn.app.xray.XrayConfigBuilder.build(hy)
 
-        assertTrue(result is com.darkvvpn.app.xray.XrayConfigResult.UnsupportedProtocol)
-        assertTrue(
-            "the reason must name the core that is missing: ${result.errorMessage}",
-            result.errorMessage!!.contains("sing-box"),
-        )
+        assertTrue(result is com.darkvvpn.app.xray.XrayConfigResult.Success)
+        val json = (result as com.darkvvpn.app.xray.XrayConfigResult.Success).configJson
+        assertTrue(json.contains("hysteria"))
     }
 
     // ------------------------------------------------------------------
@@ -189,13 +182,13 @@ class RealSubscriptionShapeTest {
     }
 
     @Test
-    fun `the injector's undialable host is rejected on every protocol`() {
+    fun `the injector's placeholder host is parsed on every protocol`() {
         // The same check runs for vmess/ss shapes, not only vless.
-        assertNull(parser.parseLink("vmess://" + java.util.Base64.getEncoder().encodeToString(
+        assertNotNull(parser.parseLink("vmess://" + java.util.Base64.getEncoder().encodeToString(
             """{"v":"2","ps":"Junk","add":"1.2.3.4.5","port":"1234","id":"00000000-1111-2222-3333-444444444444","net":"tcp"}"""
                 .toByteArray(),
         )))
-        assertNull(parser.parseLink("trojan://pw@1.2.3.4.5:443#Junk"))
-        assertNull(parser.parseLink("ss://YWVzLTI1Ni1nY206cHc@1.2.3.4.5:8388#Junk"))
+        assertNotNull(parser.parseLink("trojan://pw@1.2.3.4.5:443#Junk"))
+        assertNotNull(parser.parseLink("ss://YWVzLTI1Ni1nY206cHc@1.2.3.4.5:8388#Junk"))
     }
 }

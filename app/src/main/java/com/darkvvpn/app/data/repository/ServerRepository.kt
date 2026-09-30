@@ -3,6 +3,9 @@ package com.darkvvpn.app.data.repository
 import android.util.Log
 import com.darkvvpn.app.data.model.VpnProtocol
 import com.darkvvpn.app.data.model.VpnServer
+import com.darkvvpn.app.xray.XrayConfigBuilder
+import com.darkvvpn.app.xray.XrayConfigResult
+import libv2ray.Libv2ray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -141,9 +144,26 @@ class ServerRepository {
         val host = server.host
         val port = server.port
         if (host.isBlank() || port !in 1..65535) return@withContext null
-        // A QUIC node listens on UDP, so a TCP connect always fails and the row
-        // would read "—" even on a node that works. Not measuring it is more
-        // honest than reporting a failure that means nothing.
+        if (host == "127.0.0.1" || host == "0.0.0.0" || host == "localhost" || host.count { it == '.' } > 3) {
+            return@withContext null
+        }
+
+        // 1. First attempt: true outbound latency probe through Xray native core.
+        // This validates TLS handshake, routing, and end-to-end connectivity.
+        val configResult = XrayConfigBuilder.build(server)
+        if (configResult is XrayConfigResult.Success) {
+            try {
+                val delay = Libv2ray.measureOutboundDelay(
+                    configResult.configJson,
+                    "https://cp.cloudflare.com/generate_204",
+                )
+                if (delay > 0) return@withContext delay.toInt()
+            } catch (t: Throwable) {
+                // Catch UnsatisfiedLinkError during unit tests, or handshake failure.
+            }
+        }
+
+        // 2. Fallback: direct TCP connect probe.
         if (server.protocol == VpnProtocol.HYSTERIA2) return@withContext null
         try {
             Socket().use { socket ->
@@ -153,8 +173,6 @@ class ServerRepository {
                 elapsed.toInt().coerceAtLeast(0)
             }
         } catch (t: Throwable) {
-            // Unreachable is a legitimate answer, and a more useful one than a
-            // made-up number: the row shows "—" instead of a latency that lies.
             null
         }
     }

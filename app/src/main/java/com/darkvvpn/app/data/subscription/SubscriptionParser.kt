@@ -106,12 +106,8 @@ class SubscriptionParser(
             else -> parseStandard(link, protocol)
         }
 
-        // A panel that injects an announcement node does it with an endpoint that
-        // cannot resolve (`1.2.3.4.5:1234` with a "update your subscription" remark,
-        // in the list this was written against). Imported, it becomes a row that
-        // always fails; dropped, the list contains only things that can connect.
-        if (node != null && !HostValidator.isDialable(node.host)) return null
-
+        // Announcement and informational nodes (e.g. "Update subscription daily")
+        // are preserved so that user messages and provider announcements are retained.
         return node
     }
 
@@ -138,7 +134,7 @@ class SubscriptionParser(
 
         val (user, pass) = splitCredentials(userInfo, protocol)
         val security = resolveSecurity(params, protocol, port)
-        val transport = VpnTransport.fromName(params["type"] ?: params["net"])
+        val transport = if (protocol == VpnProtocol.HYSTERIA2) VpnTransport.HYSTERIA else VpnTransport.fromName(params["type"] ?: params["net"])
         val geo = GeoNaming.resolve(remark ?: host)
 
         val base = VpnServer(

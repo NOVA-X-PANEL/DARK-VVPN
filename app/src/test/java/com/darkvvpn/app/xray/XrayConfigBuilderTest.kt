@@ -338,17 +338,17 @@ class XrayConfigBuilderTest {
     }
 
     @Test
-    fun `hysteria2 is reported as unsupported rather than mis-compiled`() {
-        // Emitting a config the core cannot run would fail at runtime with an
-        // opaque error; naming the problem is the whole point of this branch.
+    fun `hysteria2 is compiled into a valid xray outbound`() {
         val hy2 = VpnServer(
             name = "h", host = "h.example", port = 443,
             protocol = VpnProtocol.HYSTERIA2, password = "pw",
         )
         val result = XrayConfigBuilder.build(hy2)
-        assertTrue(result is XrayConfigResult.UnsupportedProtocol)
-        assertFalse(result.isSuccess)
-        assertTrue(result.errorMessage!!.contains("sing-box"))
+        assertTrue(result is XrayConfigResult.Success)
+        assertTrue(result.isSuccess)
+        val json = (result as XrayConfigResult.Success).configJson
+        assertTrue(json.contains("hysteria"))
+        assertTrue(json.contains(""""auth": "pw"""") || json.contains(""""auth":"pw""""))
     }
 
     // ---- validation ----------------------------------------------------

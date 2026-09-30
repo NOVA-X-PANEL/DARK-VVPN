@@ -120,9 +120,9 @@ class TunBridgeContractTest {
     }
 
     @Test
-    fun `an unsupported protocol is refused before any config is built`() {
-        val hy2 = sample(VpnProtocol.HYSTERIA2)
+    fun `hysteria2 protocol is built as an xray outbound`() {
+        val hy2 = sample(VpnProtocol.HYSTERIA2).copy(password = "secret")
         val result = XrayConfigBuilder.build(hy2)
-        assertTrue(result is XrayConfigResult.UnsupportedProtocol)
+        assertTrue(result is XrayConfigResult.Success)
     }
 }

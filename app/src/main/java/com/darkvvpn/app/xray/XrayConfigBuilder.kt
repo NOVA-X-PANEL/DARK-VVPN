@@ -218,7 +218,7 @@ object XrayConfigBuilder {
                 else -> null
             }
 
-            VpnProtocol.HYSTERIA2 -> return null // handled above
+            VpnProtocol.HYSTERIA2 -> if (server.password.isNullOrBlank()) "password" else null
         }
         if (missing != null) {
             return XrayConfigResult.InvalidNode(
@@ -402,7 +402,13 @@ object XrayConfigBuilder {
             }
         }
 
-        VpnProtocol.HYSTERIA2 -> buildJsonObject { /* unreachable: rejected above */ }
+        VpnProtocol.HYSTERIA2 -> outbound(server) {
+            putJsonObject("settings") {
+                put("version", 2)
+                put("address", server.host)
+                put("port", server.port)
+            }
+        }
     }
 
     /**
@@ -429,50 +435,66 @@ object XrayConfigBuilder {
     // ------------------------------------------------------------------
     private fun buildStreamSettings(server: VpnServer): JsonObject? {
         val isTunnel = server.protocol in setOf(
-            VpnProtocol.VLESS, VpnProtocol.VMESS, VpnProtocol.TROJAN,
+            VpnProtocol.VLESS, VpnProtocol.VMESS, VpnProtocol.TROJAN, VpnProtocol.HYSTERIA2,
         )
         // Shadowsocks and plain proxies ignore TLS/transport settings entirely.
         if (!isTunnel) return null
 
         return buildJsonObject {
-            put("network", server.transport.wireName)
+            val netName = if (server.protocol == VpnProtocol.HYSTERIA2) "hysteria" else server.transport.wireName
+            put("network", netName)
 
-            when (server.security) {
-                VpnSecurity.REALITY -> {
-                    put("security", "reality")
-                    putJsonObject("realitySettings") {
-                        put("serverName", server.sni.orEmpty())
-                        put("fingerprint", server.fingerprint ?: "chrome")
-                        put("publicKey", server.publicKey.orEmpty())
-                        put("shortId", server.shortId.orEmpty())
-                        put("spiderX", server.spiderX ?: "/")
-                        put("show", false)
-                    }
+            if (server.protocol == VpnProtocol.HYSTERIA2) {
+                put("security", "tls")
+                putJsonObject("tlsSettings") {
+                    put("serverName", server.sni ?: server.hostHeader ?: server.host)
+                    put("allowInsecure", server.allowInsecure)
+                    server.fingerprint?.let { put("fingerprint", it) }
+                    val alpn = if (server.alpn.isNotEmpty()) server.alpn else listOf("h3")
+                    putJsonArray("alpn") { alpn.forEach { add(it) } }
                 }
-
-                VpnSecurity.TLS, VpnSecurity.XTLS -> {
-                    put("security", server.security.wireName)
-                    val key = if (server.security == VpnSecurity.XTLS) "xtlsSettings" else "tlsSettings"
-                    putJsonObject(key) {
-                        put("serverName", server.sni ?: server.hostHeader ?: server.host)
-                        put("allowInsecure", server.allowInsecure)
-                        server.fingerprint?.let { put("fingerprint", it) }
-                        // NOT the link's ALPN verbatim. A panel that advertises
-                        // `h2,http/1.1,h3` makes the server pick h2, and a
-                        // WebSocket node then cannot upgrade — see AlpnPolicy,
-                        // which documents the measurement.
-                        val alpn = AlpnPolicy.effective(server.alpn, server.transport, server.security)
-                        if (alpn.isNotEmpty()) {
-                            putJsonArray("alpn") { alpn.forEach { add(it) } }
+                putJsonObject("hysteriaSettings") {
+                    put("version", 2)
+                    put("auth", server.password.orEmpty())
+                }
+            } else {
+                when (server.security) {
+                    VpnSecurity.REALITY -> {
+                        put("security", "reality")
+                        putJsonObject("realitySettings") {
+                            put("serverName", server.sni.orEmpty())
+                            put("fingerprint", server.fingerprint ?: "chrome")
+                            put("publicKey", server.publicKey.orEmpty())
+                            put("shortId", server.shortId.orEmpty())
+                            put("spiderX", server.spiderX ?: "/")
+                            put("show", false)
                         }
                     }
+
+                    VpnSecurity.TLS, VpnSecurity.XTLS -> {
+                        put("security", server.security.wireName)
+                        val key = if (server.security == VpnSecurity.XTLS) "xtlsSettings" else "tlsSettings"
+                        putJsonObject(key) {
+                            put("serverName", server.sni ?: server.hostHeader ?: server.host)
+                            put("allowInsecure", server.allowInsecure)
+                            server.fingerprint?.let { put("fingerprint", it) }
+                            // NOT the link's ALPN verbatim. A panel that advertises
+                            // `h2,http/1.1,h3` makes the server pick h2, and a
+                            // WebSocket node then cannot upgrade — see AlpnPolicy,
+                            // which documents the measurement.
+                            val alpn = AlpnPolicy.effective(server.alpn, server.transport, server.security)
+                            if (alpn.isNotEmpty()) {
+                                putJsonArray("alpn") { alpn.forEach { add(it) } }
+                            }
+                        }
+                    }
+
+                    VpnSecurity.NONE -> put("security", "none")
                 }
 
-                VpnSecurity.NONE -> put("security", "none")
-            }
-
-            buildTransportSettings(server)?.let { transport ->
-                transport.forEach { (k, v) -> put(k, v) }
+                buildTransportSettings(server)?.let { transport ->
+                    transport.forEach { (k, v) -> put(k, v) }
+                }
             }
         }
     }
