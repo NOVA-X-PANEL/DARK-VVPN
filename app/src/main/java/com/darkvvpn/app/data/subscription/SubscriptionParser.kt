@@ -158,6 +158,9 @@ class SubscriptionParser(
             alpn = params["alpn"]?.split(',')?.filter { it.isNotBlank() } ?: emptyList(),
             path = LinkText.normalisePath(params["path"]),
             hostHeader = params["host"] ?: params["hostheader"],
+            headerType = params["headerType"] ?: params["headertype"] ?: params["type"]?.takeIf {
+                transport == VpnTransport.TCP && it.equals("http", ignoreCase = true)
+            },
             serviceName = params["serviceName"] ?: params["servicename"],
             kcpSeed = params["seed"],
             uuid = if (protocol == VpnProtocol.VLESS) user else null,
@@ -223,10 +226,12 @@ class SubscriptionParser(
             // VMess has no standard insecure flag; accept the two spellings that
             // the panels that do emit one actually use.
             allowInsecure = LinkText.isTruthy(node.str("allowInsecure")) ||
+                LinkText.isTruthy(node.str("insecure")) ||
                 LinkText.isTruthy(node.str("skip-cert-verify")),
             alpn = node.str("alpn")?.split(',')?.filter { it.isNotBlank() } ?: emptyList(),
             path = LinkText.normalisePath(node.str("path")),
             hostHeader = node.str("host")?.takeIf { it.isNotBlank() },
+            headerType = node.str("type")?.takeIf { it.isNotBlank() && it != "none" },
             serviceName = node.str("path")?.takeIf {
                 VpnTransport.fromName(node.str("net")) == VpnTransport.GRPC
             },
@@ -262,6 +267,7 @@ class SubscriptionParser(
             sni = params["sni"] ?: params["host"],
             path = LinkText.normalisePath(params["path"]),
             hostHeader = params["host"],
+            headerType = params["headerType"] ?: params["headertype"],
             serviceName = params["serviceName"],
             uuid = uuid,
             alterId = params["aid"]?.toIntOrNull() ?: 0,

@@ -326,4 +326,17 @@ class SubscriptionParserTest {
         assertEquals(VpnProtocol.TROJAN, second.protocol)
         assertEquals("trojanpw", second.password)
     }
+
+    @Test
+    fun `parses headerType for tcp tunnel nodes correctly`() {
+        val link = "vless://00000000-1111-2222-3333-444444444444@185.100.200.1:8080?type=tcp&headerType=http&host=foreign.example.com&path=/#Iran-Tunnel"
+        val result = parser.parse(link)
+        assertEquals(1, result.servers.size)
+        val server = result.servers[0]
+        assertEquals(VpnProtocol.VLESS, server.protocol)
+        assertEquals(VpnTransport.TCP, server.transport)
+        assertEquals(VpnSecurity.NONE, server.security)
+        assertEquals("http", server.headerType)
+        assertEquals("foreign.example.com", server.hostHeader)
+    }
 }

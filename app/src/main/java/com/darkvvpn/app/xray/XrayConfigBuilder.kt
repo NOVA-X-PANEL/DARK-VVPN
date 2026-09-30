@@ -54,6 +54,7 @@ object XrayConfigBuilder {
     const val OUTBOUND_TAG_PROXY = "proxy"
     const val OUTBOUND_TAG_DIRECT = "direct"
     const val OUTBOUND_TAG_BLOCK = "block"
+    const val OUTBOUND_TAG_DNS = "dns-out"
     const val INBOUND_TAG_TUN = "tun"
 
     /**
@@ -96,6 +97,19 @@ object XrayConfigBuilder {
                 put("dnsLog", false)
             }
 
+            // Internal DNS resolver: routes queries through DoH over TCP.
+            // This ensures DNS resolution succeeds even on TCP-only relay/tunnel nodes
+            // where raw UDP flows are blocked or unsupported by the relay server.
+            putJsonObject("dns") {
+                putJsonArray("servers") {
+                    add("https://1.1.1.1/dns-query")
+                    add("https://8.8.8.8/dns-query")
+                    add("1.1.1.1")
+                    add("8.8.8.8")
+                }
+                put("queryStrategy", "UseIP")
+            }
+
             putJsonObject("policy") {
                 putJsonObject("levels") {
                     putJsonObject("8") {
@@ -117,6 +131,10 @@ object XrayConfigBuilder {
 
             putJsonArray("outbounds") {
                 add(buildProtocolOutbound(server))
+                add(buildJsonObject {
+                    put("tag", OUTBOUND_TAG_DNS)
+                    put("protocol", "dns")
+                })
                 add(buildJsonObject {
                     put("tag", OUTBOUND_TAG_DIRECT)
                     put("protocol", "freedom")
@@ -148,6 +166,14 @@ object XrayConfigBuilder {
                         })
                     }
 
+                    // Intercept DNS queries from the TUN interface and route to internal DNS
+                    add(buildJsonObject {
+                        put("type", "field")
+                        putJsonArray("inboundTag") { add(INBOUND_TAG_TUN) }
+                        put("port", "53")
+                        put("outboundTag", OUTBOUND_TAG_DNS)
+                    })
+
                     // Loopback and link-local traffic stays off the tunnel, so a
                     // LAN device (a printer, a NAS) is still reachable.
                     add(buildJsonObject {
@@ -172,11 +198,6 @@ object XrayConfigBuilder {
                     })
                 }
             }
-
-            // No `dns` section: DNS is the device's own resolver pointed at
-            // TUN_DNS_SERVERS, and those queries arrive at the netstack as
-            // ordinary UDP flows and travel through the node like any other
-            // traffic. Configuring Xray DNS here as well would hijack them.
         }
 
         return XrayConfigResult.Success(
@@ -570,7 +591,39 @@ object XrayConfigBuilder {
                 },
             )
 
-            VpnTransport.TCP, VpnTransport.RAW, VpnTransport.HYSTERIA -> null
+            VpnTransport.TCP -> {
+                if (server.headerType.equals("http", ignoreCase = true)) {
+                    mapOf(
+                        "tcpSettings" to buildJsonObject {
+                            putJsonObject("header") {
+                                put("type", "http")
+                                putJsonObject("request") {
+                                    put("version", "1.1")
+                                    put("method", "GET")
+                                    putJsonArray("path") { add(path ?: "/") }
+                                    putJsonObject("headers") {
+                                        putJsonArray("Host") { add(hostHeader) }
+                                        putJsonArray("User-Agent") {
+                                            add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                                        }
+                                        putJsonArray("Accept-Encoding") {
+                                            add("gzip, deflate")
+                                        }
+                                        putJsonArray("Connection") {
+                                            add("keep-alive")
+                                        }
+                                        putJsonArray("Pragma") {
+                                            add("no-cache")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                } else null
+            }
+
+            VpnTransport.RAW, VpnTransport.HYSTERIA -> null
         }
     }
 

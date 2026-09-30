@@ -112,11 +112,11 @@ class TunBridgeContractTest {
     }
 
     @Test
-    fun `the config carries no dns section`() {
-        // DNS is the device's resolver pointed at the tun's DNS servers; Xray
-        // would hijack those queries if it had its own dns block here.
+    fun `the config carries a robust dns section with doh and fallback`() {
         val doc = success(sample()).document
-        assertEquals(null, doc["dns"])
+        val dns = doc["dns"]!!.jsonObject
+        assertNotNull(dns["servers"])
+        assertTrue(dns["servers"]!!.jsonArray.isNotEmpty())
     }
 
     @Test

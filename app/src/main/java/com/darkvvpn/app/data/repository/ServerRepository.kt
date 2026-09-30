@@ -3,9 +3,7 @@ package com.darkvvpn.app.data.repository
 import android.util.Log
 import com.darkvvpn.app.data.model.VpnProtocol
 import com.darkvvpn.app.data.model.VpnServer
-import com.darkvvpn.app.xray.XrayConfigBuilder
-import com.darkvvpn.app.xray.XrayConfigResult
-import libv2ray.Libv2ray
+import com.darkvvpn.app.data.subscription.HostValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -147,29 +145,10 @@ class ServerRepository {
         val host = server.host
         val port = server.port
         if (host.isBlank() || port !in 1..65535) return@withContext null
-        if (host == "127.0.0.1" || host == "0.0.0.0" || host == "localhost" || host.count { it == '.' } > 3) {
+        if (host == "127.0.0.1" || host == "0.0.0.0" || host == "localhost" || !HostValidator.isDialable(host)) {
             return@withContext null
         }
 
-        // 1. First attempt: true outbound latency probe through Xray native core.
-        // This validates TLS handshake, routing, and end-to-end connectivity.
-        val configResult = XrayConfigBuilder.build(server)
-        if (configResult is XrayConfigResult.Success) {
-            val testUrls = listOf(
-                "https://www.google.com/generate_204",
-                "https://cp.cloudflare.com/generate_204",
-            )
-            for (testUrl in testUrls) {
-                try {
-                    val delay = Libv2ray.measureOutboundDelay(configResult.rendered, testUrl)
-                    if (delay > 0) return@withContext delay.toInt()
-                } catch (t: Throwable) {
-                    // Catch UnsatisfiedLinkError during unit tests, or core error.
-                }
-            }
-        }
-
-        // 2. Fallback: socket probe.
         if (server.protocol == VpnProtocol.HYSTERIA2) {
             return@withContext probeUdp(host, port) ?: -1
         }
@@ -178,31 +157,43 @@ class ServerRepository {
     }
 
     private fun probeTcp(host: String, port: Int): Int? {
+        val start = System.nanoTime()
         return try {
             Socket().use { socket ->
-                val start = System.nanoTime()
+                socket.tcpNoDelay = true
                 socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
                 val elapsed = (System.nanoTime() - start) / 1_000_000
-                elapsed.toInt().coerceAtLeast(0)
+                elapsed.toInt().coerceAtLeast(1)
             }
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             null
         }
     }
 
     private fun probeUdp(host: String, port: Int): Int? {
+        val start = System.nanoTime()
         return try {
-            val start = System.nanoTime()
             DatagramSocket().use { socket ->
                 socket.soTimeout = PROBE_TIMEOUT_MS
                 val address = InetAddress.getByName(host)
-                val buf = ByteArray(1) { 0x00 }
-                val packet = DatagramPacket(buf, buf.size, address, port)
+                // RFC 9000 QUIC Version Negotiation probe:
+                // An initial packet with an unknown version triggers a Version Negotiation
+                // packet response from any compliant QUIC / Hysteria 2 server.
+                val probeBytes = byteArrayOf(
+                    0xc0.toByte(),
+                    0x0a, 0x0a, 0x0a, 0x0a,
+                    0x08, 1, 2, 3, 4, 5, 6, 7, 8,
+                    0x08, 9, 10, 11, 12, 13, 14, 15, 16,
+                )
+                val packet = DatagramPacket(probeBytes, probeBytes.size, address, port)
                 socket.send(packet)
+                val buf = ByteArray(1200)
+                val recvPacket = DatagramPacket(buf, buf.size)
+                socket.receive(recvPacket)
                 val elapsed = (System.nanoTime() - start) / 1_000_000
                 elapsed.toInt().coerceAtLeast(1)
             }
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             null
         }
     }
@@ -255,7 +246,7 @@ class ServerRepository {
         private const val TAG = "ServerRepository"
 
         /** Enough parallelism to finish a long list quickly, few enough to be polite. */
-        private const val MAX_CONCURRENT_PROBES = 5
+        private const val MAX_CONCURRENT_PROBES = 15
 
         private const val PROBE_TIMEOUT_MS = 2_500
     }

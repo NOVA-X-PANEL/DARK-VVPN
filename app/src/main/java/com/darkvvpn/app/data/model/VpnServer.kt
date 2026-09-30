@@ -66,6 +66,8 @@ data class VpnServer(
     val path: String? = null,
     /** WS/HTTP `Host` header (falls back to [sni] then [host] when absent). */
     val hostHeader: String? = null,
+    /** TCP header type, e.g. `http` or `none`. */
+    val headerType: String? = null,
     /** gRPC service name. */
     val serviceName: String? = null,
     /** mKCP seed, when the transport is KCP. */
@@ -132,7 +134,8 @@ data class VpnServer(
         get() = listOf(
             protocol.name, host, port.toString(), security.wireName, transport.wireName,
             uuid.orEmpty(), password.orEmpty(), method.orEmpty(), publicKey.orEmpty(),
-            shortId.orEmpty(), sni.orEmpty(), path.orEmpty(), serviceName.orEmpty(),
+            shortId.orEmpty(), sni.orEmpty(), path.orEmpty(), hostHeader.orEmpty(),
+            headerType.orEmpty(), serviceName.orEmpty(),
             flow.wireName, alterId.toString(),
         ).joinToString("|").lowercase()
 

@@ -43,13 +43,23 @@ class ServersViewModel(private val repository: ServerRepository) : ViewModel() {
                         it.host.contains(q, ignoreCase = true)
                 }
             }
-            // Fastest first; unmeasured nodes ("—") sort last rather than first,
-            // which is what `pingMs ?: Int.MAX_VALUE` achieves.
-            filtered.sortedWith(compareBy({ it.pingMs ?: Int.MAX_VALUE }, { it.name }))
+            // Sort order:
+            // 1. Valid ping (fastest first: 15ms, 45ms, 120ms...)
+            // 2. Timed out nodes (pingMs < 0)
+            // 3. Unmeasured nodes (pingMs == null, "—")
+            filtered.sortedWith(
+                compareBy<VpnServer> {
+                    when {
+                        it.pingMs == null -> 2_000_000_000
+                        it.pingMs < 0 -> 1_000_000_000
+                        else -> it.pingMs
+                    }
+                }.thenBy { it.name }
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Guards the one-shot automatic sweep so it does not re-run on every emission. */
-    private var autoMeasured = false
+    /** Tracks previous server count so new additions get measured. */
+    private var lastMeasuredCount = 0
 
     fun onQueryChange(value: String) {
         _query.value = value
@@ -58,15 +68,15 @@ class ServersViewModel(private val repository: ServerRepository) : ViewModel() {
     fun select(server: VpnServer) = repository.select(server.id)
 
     /**
-     * Runs a latency sweep when the list first becomes non-empty.
-     *
-     * Called from the screen's effect. Guarded so that the state updates the sweep
-     * itself produces do not trigger another sweep.
+     * Runs a latency sweep when the list first becomes non-empty or servers change.
      */
     fun measureOnceIfNeeded() {
-        if (autoMeasured || allServers.value.isEmpty() || measuring.value) return
-        autoMeasured = true
-        measureAll()
+        val count = allServers.value.size
+        if (count == 0 || measuring.value) return
+        if (count != lastMeasuredCount) {
+            lastMeasuredCount = count
+            measureAll()
+        }
     }
 
     /** The refresh button: re-probe every node. */

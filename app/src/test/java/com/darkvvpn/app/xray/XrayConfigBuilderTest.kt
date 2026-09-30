@@ -452,4 +452,28 @@ class XrayConfigBuilderTest {
         val ips = direct["ip"]!!.jsonArray.map { it.jsonPrimitive.content }
         assertTrue(ips.any { it.contains("private") || it.startsWith("10.") || it.startsWith("192.168.") })
     }
+
+    @Test
+    fun `tcp transport with headerType http emits tcpSettings with http header`() {
+        val node = baseVless().copy(
+            transport = VpnTransport.TCP,
+            headerType = "http",
+            hostHeader = "host.example.com",
+            path = "/test",
+        )
+        val doc = success(node).document
+        val proxy = doc["outbounds"]!!.jsonArray[0].jsonObject
+        val stream = proxy["streamSettings"]!!.jsonObject
+        assertNotNull(stream["tcpSettings"])
+        val tcp = stream["tcpSettings"]!!.jsonObject
+        assertEquals("http", tcp["header"]!!.jsonObject.str("type"))
+    }
+
+    @Test
+    fun `dns rule intercepts port 53 to dns-out before the catch-all`() {
+        val rules = success(baseVless()).document.routingRules()
+        val dnsRule = rules.firstOrNull { it["outboundTag"]?.jsonPrimitive?.content == XrayConfigBuilder.OUTBOUND_TAG_DNS }
+        assertNotNull("dns-out routing rule must exist", dnsRule)
+        assertEquals("53", dnsRule!!["port"]!!.jsonPrimitive.content)
+    }
 }
