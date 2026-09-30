@@ -5,10 +5,12 @@ import com.darkvvpn.app.data.model.Subscription
 import com.darkvvpn.app.data.model.SubscriptionFormat
 import com.darkvvpn.app.data.model.VpnServer
 import com.darkvvpn.app.util.Redact
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -157,15 +159,15 @@ class SubscriptionRepository(
      * Refreshes one subscription. Never throws: a network or parse failure is
      * recorded on the subscription and returned as [RefreshOutcome.Failure].
      */
-    suspend fun refresh(subscriptionId: String, userAgent: String): RefreshOutcome {
+    suspend fun refresh(subscriptionId: String, userAgent: String): RefreshOutcome = withContext(Dispatchers.IO) {
         val subscription = _subscriptions.value.firstOrNull { it.id == subscriptionId }
-            ?: return RefreshOutcome.Failure("This subscription no longer exists.")
+            ?: return@withContext RefreshOutcome.Failure("This subscription no longer exists.")
 
         val fetch = http.get(subscription.url, userAgent)
 
         if (fetch.error != null) {
             recordFailure(subscriptionId, fetch.error, fetch.httpCode)
-            return RefreshOutcome.Failure(fetch.error, fetch.httpCode)
+            return@withContext RefreshOutcome.Failure(fetch.error, fetch.httpCode)
         }
 
         val parsed = parser.parse(fetch.body.orEmpty(), fetch.userInfoHeader)
@@ -173,7 +175,7 @@ class SubscriptionRepository(
         if (parsed.servers.isEmpty()) {
             val reason = parsed.error ?: "The subscription contained no usable nodes."
             recordFailure(subscriptionId, reason, fetch.httpCode)
-            return RefreshOutcome.Failure(reason, fetch.httpCode)
+            return@withContext RefreshOutcome.Failure(reason, fetch.httpCode)
         }
 
         // Tag every node with its origin so a later refresh replaces exactly
@@ -202,19 +204,19 @@ class SubscriptionRepository(
             }
         }
         Log.i(TAG, "refreshed ${Redact.url(subscription.url)}: ${tagged.size} nodes")
-        return RefreshOutcome.Success(tagged.size, parsed.format)
+        RefreshOutcome.Success(tagged.size, parsed.format)
     }
 
     /** Refreshes every enabled subscription that opted into auto-update. */
-    suspend fun refreshAllAuto(userAgent: String): List<Pair<String, RefreshOutcome>> {
+    suspend fun refreshAllAuto(userAgent: String): List<Pair<String, RefreshOutcome>> = withContext(Dispatchers.IO) {
         val targets = _subscriptions.value.filter { it.enabled && it.autoUpdate }
-        return targets.map { it.id to refresh(it.id, userAgent) }
+        targets.map { it.id to refresh(it.id, userAgent) }
     }
 
     /** Refreshes every enabled subscription, ignoring the auto-update flag. */
-    suspend fun refreshAll(userAgent: String): List<Pair<String, RefreshOutcome>> {
+    suspend fun refreshAll(userAgent: String): List<Pair<String, RefreshOutcome>> = withContext(Dispatchers.IO) {
         val targets = _subscriptions.value.filter { it.enabled }
-        return targets.map { it.id to refresh(it.id, userAgent) }
+        targets.map { it.id to refresh(it.id, userAgent) }
     }
 
     /**
@@ -254,15 +256,15 @@ class SubscriptionRepository(
      */
     suspend fun previewUrl(
         url: String,
-        userAgent: String = "DARK-VPN/1.0",
-    ): Triple<List<VpnServer>, String?, String?> {
+        userAgent: String = "v2rayNG/1.8.5",
+    ): Triple<List<VpnServer>, String?, String?> = withContext(Dispatchers.IO) {
         val fetch = http.get(url, userAgent)
         if (fetch.error != null) {
             val detail = fetch.httpCode?.let { " (HTTP $it)" }.orEmpty()
-            return Triple(emptyList(), null, fetch.error + detail)
+            return@withContext Triple(emptyList(), null, fetch.error + detail)
         }
         val parsed = parser.parse(fetch.body.orEmpty(), fetch.userInfoHeader)
-        return Triple(parsed.servers, parsed.format.label, parsed.error)
+        Triple(parsed.servers, parsed.format.label, parsed.error)
     }
 
     // ------------------------------------------------------------------
@@ -465,18 +467,18 @@ class HttpFetcher(
     private val connectTimeoutMillis: Int = 15_000,
     private val readTimeoutMillis: Int = 20_000,
 ) {
-    fun get(url: String, userAgent: String): HttpFetch {
+    suspend fun get(url: String, userAgent: String): HttpFetch = withContext(Dispatchers.IO) {
         var current = url.trim()
 
         repeat(MAX_REDIRECTS + 1) { hop ->
             val parsed = try {
                 URL(current)
             } catch (_: Exception) {
-                return HttpFetch(null, null, null, "That is not a valid URL.")
+                return@withContext HttpFetch(null, null, null, "That is not a valid URL.")
             }
 
             if (!isAllowedScheme(parsed.protocol)) {
-                return HttpFetch(
+                return@withContext HttpFetch(
                     null, null, null,
                     if (hop == 0) {
                         "Only http:// and https:// subscription URLs are allowed."
@@ -492,38 +494,38 @@ class HttpFetcher(
                 current = runCatching {
                     URL(parsed, response.location).toString()
                 }.getOrElse {
-                    return HttpFetch(null, code, null, "The subscription redirected to an invalid address.")
+                    return@withContext HttpFetch(null, code, null, "The subscription redirected to an invalid address.")
                 }
                 return@repeat
             }
             if (response.error != null || code == null) {
-                return HttpFetch(null, code, response.userInfoHeader, response.error)
+                return@withContext HttpFetch(null, code, response.userInfoHeader, response.error)
             }
             if (code !in 200..299) {
-                return HttpFetch(null, code, response.userInfoHeader, describeHttpFailure(code))
+                return@withContext HttpFetch(null, code, response.userInfoHeader, describeHttpFailure(code))
             }
 
             val raw = response.bytes
-                ?: return HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
+                ?: return@withContext HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
 
             val text = decodeBody(raw, response.contentEncoding)
             if (text.isBlank()) {
-                return HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
+                return@withContext HttpFetch(null, code, response.userInfoHeader, "The server returned an empty response.")
             }
             if (looksLikeMarkup(text)) {
                 // A web page where a node list was expected. Naming it is the
                 // difference between "your provider is down" and "no usable nodes".
-                return HttpFetch(
+                return@withContext HttpFetch(
                     null, code, response.userInfoHeader,
                     "The server returned a web page instead of a node list — " +
                         "the URL is probably wrong, expired, or behind a login.",
                 )
             }
 
-            return HttpFetch(text, code, response.userInfoHeader)
+            return@withContext HttpFetch(text, code, response.userInfoHeader)
         }
 
-        return HttpFetch(null, null, null, "The subscription redirected too many times.")
+        HttpFetch(null, null, null, "The subscription redirected too many times.")
     }
 
     // ------------------------------------------------------------------
@@ -546,7 +548,7 @@ class HttpFetcher(
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", userAgent)
             connection.setRequestProperty("Accept", "*/*")
-            connection.setRequestProperty("Accept-Encoding", "gzip")
+            connection.setRequestProperty("Accept-Encoding", "gzip, deflate")
 
             val code = connection.responseCode
             val userInfo = connection.getHeaderField("subscription-userinfo")
@@ -570,9 +572,11 @@ class HttpFetcher(
                 contentEncoding = connection.contentEncoding,
             )
         } catch (e: IOException) {
-            RawResponse(error = "Could not reach the subscription (${e.javaClass.simpleName}).")
+            val msg = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+            RawResponse(error = "Could not reach subscription ($msg).")
         } catch (e: Exception) {
-            RawResponse(error = "The subscription could not be loaded.")
+            val msg = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+            RawResponse(error = "Could not load subscription ($msg).")
         } finally {
             runCatching { connection?.disconnect() }
         }

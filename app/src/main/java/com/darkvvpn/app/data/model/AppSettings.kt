@@ -18,7 +18,7 @@ data class AppSettings(
     val subscriptionRefreshHours: Int = 12,
     /** Only refresh while on an unmetered network. */
     val subscriptionRefreshOverWifiOnly: Boolean = true,
-    val subscriptionUserAgent: String = "DARK-VVPN/1.0",
+    val subscriptionUserAgent: String = "v2rayNG/1.8.5",
     /** Replace a node in place when a refresh serves the same endpoint. */
     val mergeDuplicateNodes: Boolean = true,
 
