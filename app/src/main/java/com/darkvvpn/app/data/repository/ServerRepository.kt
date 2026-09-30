@@ -223,15 +223,14 @@ class ServerRepository {
     // ------------------------------------------------------------------
 
     /**
-     * Merges the two sources. Deduplication is on [VpnServer.nodeKey]
-     * (protocol + host + port), and the subscription wins: it is the source that
-     * carries an account, so it should supersede an identical manual entry.
+     * Merges the two sources. All subscription nodes are preserved in order,
+     * and any imported nodes not already in the subscription list are retained.
      */
     private fun recompute() {
-        val merged = LinkedHashMap<String, VpnServer>()
-        imported.value.forEach { merged[it.nodeKey] = it }
-        fromSubscriptions.value.forEach { merged[it.nodeKey] = it }
-        _servers.value = merged.values.toList()
+        val subNodes = fromSubscriptions.value
+        val subKeys = subNodes.map { it.nodeKey }.toSet()
+        val uniqueImported = imported.value.filterNot { it.nodeKey in subKeys }
+        _servers.value = subNodes + uniqueImported
     }
 
     /** Keeps the selection valid when the selected node disappears. */

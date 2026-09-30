@@ -143,7 +143,15 @@ data class VpnServer(
 
     /** A stable identity across subscription refreshes (node, not credentials). */
     val nodeKey: String
-        get() = "$protocol|$host|$port".lowercase()
+        get() = listOf(
+            protocol.name,
+            host,
+            port.toString(),
+            sni.orEmpty(),
+            hostHeader.orEmpty(),
+            path.orEmpty(),
+            name,
+        ).joinToString("|").lowercase()
 }
 
 /** Derived from [VpnServer.pingMs]; not persisted, so it needs no serializer. */
