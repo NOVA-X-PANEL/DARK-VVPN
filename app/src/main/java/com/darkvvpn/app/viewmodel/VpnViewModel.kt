@@ -18,6 +18,7 @@ import com.darkvvpn.app.vpn.DarkVvpnService
 import com.darkvvpn.app.vpn.VpnConnectionManager
 import com.darkvvpn.app.xray.XrayConfigBuilder
 import com.darkvvpn.app.xray.XrayConfigResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Drives the Home screen: which node is selected, what the tunnel is doing, and
@@ -163,7 +165,11 @@ class VpnViewModel(
         viewModelScope.launch {
             val blockAds = settingsRepository.settings.first().blockAdsAndTrackers
 
-            when (val result = XrayConfigBuilder.build(server, blockAds = blockAds)) {
+            val result = withContext(Dispatchers.IO) {
+                XrayConfigBuilder.build(server, blockAds = blockAds)
+            }
+
+            when (result) {
                 is XrayConfigResult.Success -> {
                     pendingServer = null
                     DarkVvpnService.start(context, server.id, server.name, result.rendered)
