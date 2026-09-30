@@ -414,7 +414,7 @@ class UpdateViewModel(
 
     companion object {
         /** Do not re-check more often than this from the launch-time hook. */
-        private const val CHECK_COOLDOWN_MS = 6L * 60L * 60L * 1000L
+        private const val CHECK_COOLDOWN_MS = 60L * 1000L // 1 minute
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
