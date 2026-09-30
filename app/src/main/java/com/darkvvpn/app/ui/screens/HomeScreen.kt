@@ -120,6 +120,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         subscriptionsViewModel.refreshAll()
+        updateViewModel?.checkOnLaunch()
     }
 
     Scaffold(
@@ -159,21 +160,34 @@ fun HomeScreen(
                         YellowUpdateBadge(
                             badge = updateBadge,
                             state = updateState,
-                            onClick = { updateViewModel?.openSheet() },
+                            onClick = { updateViewModel?.onBadgeClicked() },
                         )
                     } else {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = BrandBlue.copy(alpha = 0.15f),
                             border = BorderStroke(0.5.dp, BrandBlue.copy(alpha = 0.35f)),
+                            modifier = Modifier.clickable { updateViewModel?.check() },
                         ) {
-                            Text(
-                                text = "v${com.darkvvpn.app.BuildConfig.VERSION_NAME}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandBlue,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
+                            ) {
+                                if (updateState is UpdateUiState.Checking) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(10.dp),
+                                        strokeWidth = 1.5.dp,
+                                        color = BrandBlue,
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = "v${com.darkvvpn.app.BuildConfig.VERSION_NAME}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandBlue,
+                                )
+                            }
                         }
                     }
                 }

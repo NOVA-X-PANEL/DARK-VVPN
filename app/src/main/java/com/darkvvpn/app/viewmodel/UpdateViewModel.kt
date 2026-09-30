@@ -224,7 +224,7 @@ class UpdateViewModel(
         }
     }
 
-    private suspend fun runCheck(settings: AppSettings, silent: Boolean) {
+    private suspend fun runCheck(settings: AppSettings, silent: Boolean, autoDownload: Boolean = false) {
         if (!silent) _state.value = UpdateUiState.Checking
 
         val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -258,6 +258,9 @@ class UpdateViewModel(
                         installedVersion = installed,
                         needsInstallPermission = !installer.canInstallPackages(),
                     )
+                    if (autoDownload) {
+                        download()
+                    }
                 }
             }
 
@@ -312,6 +315,45 @@ class UpdateViewModel(
         // Otherwise just check. Every outcome is rendered now, so this always
         // produces something visible rather than a sheet that closes itself.
         check()
+    }
+
+    /**
+     * Tapped the yellow update badge on the home screen:
+     * Immediately kicks off the download (or install if already downloaded),
+     * and presents the update sheet.
+     */
+    fun onBadgeClicked() {
+        val current = _state.value
+        if (current is UpdateUiState.Available) {
+            if (current.readyToInstall != null) {
+                install()
+                return
+            }
+            if (!current.isDownloading) {
+                download()
+            }
+            return
+        }
+
+        val cached = lastKnownRelease
+        val installed = installer.installedVersionName() ?: BuildConfig.VERSION_NAME
+        if (cached != null) {
+            val available = UpdateUiState.Available(
+                release = cached,
+                installedVersion = installed,
+                needsInstallPermission = !installer.canInstallPackages(),
+            )
+            _state.value = available
+            download()
+            return
+        }
+
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            _checkReport.value = null
+            _checkReportIsError.value = false
+            runCheck(settings, silent = false, autoDownload = true)
+        }
     }
 
     /** Closes the sheet. Refuses while a download is in flight. */
@@ -413,7 +455,7 @@ class UpdateViewModel(
 
     companion object {
         /** Do not re-check more often than this from the launch-time hook. */
-        private const val CHECK_COOLDOWN_MS = 60L * 1000L // 1 minute
+        private const val CHECK_COOLDOWN_MS = 15L * 1000L // 15 seconds
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

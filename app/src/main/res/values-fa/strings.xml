@@ -58,10 +58,10 @@
     <string name="update_banner_body">برای مشاهده تغییرات و نصب لمس کنید.</string>
     <string name="update_banner_body_prerelease">نسخه پیش‌نمایش. برای جزئیات لمس کنید.</string>
     <string name="update_banner_action">آپدیت</string>
-    <string name="update_badge_install">نصب به‌روزرسانی v%1$s</string>
-    <string name="update_badge_downloading_pct">در حال دریافت %1$d٪…</string>
+    <string name="update_badge_install">نصب نسخه v%1$s</string>
+    <string name="update_badge_downloading_pct">در حال دریافت %1$d٪</string>
     <string name="update_badge_downloading">در حال دریافت…</string>
-    <string name="update_badge_available">به‌روزرسانی به نسخه v%1$s</string>
+    <string name="update_badge_available">⚡ بروزرسانی v%1$s</string>
     <string name="update_uptodate_title">برنامه به‌روز است</string>
     <string name="update_check_failed_title">خطا در بررسی آپدیت</string>
     <string name="update_checking_body">در حال ارتباط با گیت‌هاب جهت دریافت اطلاعات نسخه…</string>

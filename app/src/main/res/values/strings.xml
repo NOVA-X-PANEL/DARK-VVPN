@@ -58,10 +58,10 @@
     <string name="update_banner_body">Tap to see what changed and install it.</string>
     <string name="update_banner_body_prerelease">A pre-release. Tap to see the notes.</string>
     <string name="update_banner_action">Update</string>
-    <string name="update_badge_install">Install update v%1$s</string>
-    <string name="update_badge_downloading_pct">Downloading %1$d%%…</string>
+    <string name="update_badge_install">Install v%1$s</string>
+    <string name="update_badge_downloading_pct">Downloading %1$d%%</string>
     <string name="update_badge_downloading">Downloading…</string>
-    <string name="update_badge_available">Update to v%1$s</string>
+    <string name="update_badge_available">⚡ Update v%1$s</string>
     <string name="update_uptodate_title">Up to date</string>
     <string name="update_check_failed_title">Update check failed</string>
     <string name="update_checking_body">Contacting GitHub for the latest release…</string>

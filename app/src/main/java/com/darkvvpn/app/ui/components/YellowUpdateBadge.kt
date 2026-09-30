@@ -99,12 +99,12 @@ fun YellowUpdateBadge(
                 ),
             )
             .border(
-                width = 1.5.dp,
+                width = 1.dp,
                 color = Color(0xFFFFF3B0),
                 shape = RoundedCornerShape(50),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 9.dp, vertical = 3.5.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -114,14 +114,14 @@ fun YellowUpdateBadge(
             if (isDownloading) {
                 CircularProgressIndicator(
                     progress = { downloadFraction ?: 0f },
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(13.dp),
                     color = darkInk,
                     strokeWidth = 2.dp,
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
                         .background(darkInk.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center,
@@ -130,18 +130,18 @@ fun YellowUpdateBadge(
                         imageVector = if (readyToInstall) Icons.Filled.Download else Icons.Filled.Bolt,
                         contentDescription = null,
                         tint = darkInk,
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(11.dp),
                     )
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(5.dp))
 
             Text(
                 text = labelText,
                 color = darkInk,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 letterSpacing = 0.2.sp,
             )
         }
