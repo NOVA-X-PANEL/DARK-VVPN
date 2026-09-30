@@ -60,6 +60,8 @@ data class VpnServer(
     val allowInsecure: Boolean = false,
     /** ALPN override, e.g. `h2`, `http/1.1`. */
     val alpn: List<String> = emptyList(),
+    /** Encrypted Client Hello (ECH) base64 config list. */
+    val echConfigList: String? = null,
 
     // ---- transport options ---------------------------------------------
     /** WS/HTTP path. */
@@ -134,7 +136,7 @@ data class VpnServer(
         get() = listOf(
             protocol.name, host, port.toString(), security.wireName, transport.wireName,
             uuid.orEmpty(), password.orEmpty(), method.orEmpty(), publicKey.orEmpty(),
-            shortId.orEmpty(), sni.orEmpty(), path.orEmpty(), hostHeader.orEmpty(),
+            shortId.orEmpty(), sni.orEmpty(), echConfigList.orEmpty(), path.orEmpty(), hostHeader.orEmpty(),
             headerType.orEmpty(), serviceName.orEmpty(),
             flow.wireName, alterId.toString(),
         ).joinToString("|").lowercase()

@@ -339,4 +339,29 @@ class SubscriptionParserTest {
         assertEquals("http", server.headerType)
         assertEquals("foreign.example.com", server.hostHeader)
     }
+
+    @Test
+    fun `parses vless tunnel link with ECH and distinct host and sni`() {
+        val link = "vless://57aa417c-9d33-44e9-9f2c-8dc4f30349cf@pro.ksmrx2.ir:8080" +
+            "?encryption=none&type=ws&host=pro.ksmrx2.ir&path=/@DARK_VVPN&security=tls&fp=chrome" +
+            "&sni=panel.mr-x-shop.ir&alpn=h2,http/1.1,h3" +
+            "&ech=AGX+DQBhAAAgACCje8IU9XDBGiDg4ogQIH/JlTk8YN86CTvU1VxLXBOWLwAkAAEAAQABAAIAAQADAAIAAQACAAIAAgADAAMAAQADAAIAAwADABJwYW5lbC5tci14LXNob3AuaXIAAA%3D%3D" +
+            "#VIP"
+
+        val node = parser.parseLink(link)
+        assertNotNull(node)
+        requireNotNull(node)
+
+        assertEquals("pro.ksmrx2.ir", node.host)
+        assertEquals(8080, node.port)
+        assertEquals(VpnProtocol.VLESS, node.protocol)
+        assertEquals(VpnTransport.WS, node.transport)
+        assertEquals(VpnSecurity.TLS, node.security)
+        assertEquals("panel.mr-x-shop.ir", node.sni)
+        assertEquals("pro.ksmrx2.ir", node.hostHeader)
+        assertEquals("/@DARK_VVPN", node.path)
+        assertEquals("chrome", node.fingerprint)
+        assertTrue(node.echConfigList!!.startsWith("AGX+DQBh"))
+        assertTrue(node.echConfigList!!.endsWith("=="))
+    }
 }

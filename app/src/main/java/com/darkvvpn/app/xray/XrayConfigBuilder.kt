@@ -71,6 +71,12 @@ object XrayConfigBuilder {
     /** Resolver the device is told to use; queries travel through the tunnel. */
     val TUN_DNS_SERVERS = listOf("1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4")
 
+    private fun isPureIp(value: String): Boolean {
+        val clean = value.trim('[', ']')
+        val parts = clean.split('.')
+        return (parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 }) || clean.contains(':')
+    }
+
     /**
      * @param server the node to dial.
      * @param blockAds add routing rules that blackhole known ad and tracker hosts.
@@ -91,6 +97,16 @@ object XrayConfigBuilder {
 
         validate(server)?.let { return it }
 
+        val host = server.host
+        val isIp = isPureIp(host)
+        val resolvedIps = if (!isIp) {
+            runCatching {
+                java.net.InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
+            }.getOrNull()
+        } else {
+            listOf(host)
+        }
+
         val document = buildJsonObject {
             putJsonObject("log") {
                 put("loglevel", "warning")
@@ -101,11 +117,19 @@ object XrayConfigBuilder {
             // This ensures DNS resolution succeeds even on TCP-only relay/tunnel nodes
             // where raw UDP flows are blocked or unsupported by the relay server.
             putJsonObject("dns") {
+                if (!resolvedIps.isNullOrEmpty() && !isIp) {
+                    putJsonObject("hosts") {
+                        putJsonArray(host) {
+                            resolvedIps.forEach { add(it) }
+                        }
+                    }
+                }
                 putJsonArray("servers") {
                     add("https://1.1.1.1/dns-query")
                     add("https://8.8.8.8/dns-query")
                     add("1.1.1.1")
                     add("8.8.8.8")
+                    add("localhost")
                 }
                 put("queryStrategy", "UseIP")
             }
@@ -186,6 +210,7 @@ object XrayConfigBuilder {
                             add("192.168.0.0/16")
                             add("fc00::/7")
                             add("fe80::/10")
+                            resolvedIps?.forEach { add(it) }
                         }
                     })
 
@@ -497,8 +522,10 @@ object XrayConfigBuilder {
                         val key = if (server.security == VpnSecurity.XTLS) "xtlsSettings" else "tlsSettings"
                         putJsonObject(key) {
                             put("serverName", server.sni ?: server.hostHeader ?: server.host)
-                            put("allowInsecure", server.allowInsecure)
                             server.fingerprint?.let { put("fingerprint", it) }
+                            server.echConfigList?.takeIf { it.isNotBlank() }?.let {
+                                put("echConfigList", it)
+                            }
                             // NOT the link's ALPN verbatim. A panel that advertises
                             // `h2,http/1.1,h3` makes the server pick h2, and a
                             // WebSocket node then cannot upgrade — see AlpnPolicy,
@@ -537,6 +564,7 @@ object XrayConfigBuilder {
             VpnTransport.WS -> mapOf(
                 "wsSettings" to buildJsonObject {
                     put("path", path ?: "/")
+                    put("host", hostHeader)
                     put("headers", wsHeaders())
                 },
             )

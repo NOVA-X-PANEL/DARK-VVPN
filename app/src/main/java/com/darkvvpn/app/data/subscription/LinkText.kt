@@ -67,7 +67,16 @@ internal object LinkText {
                 out.putIfAbsent(decode(pair), "")
             } else {
                 val key = decode(pair.substring(0, idx))
-                val value = decode(pair.substring(idx + 1))
+                val rawVal = pair.substring(idx + 1)
+                val decoded = decode(rawVal)
+                val value = if (key.equals("ech", ignoreCase = true) ||
+                    key.equals("echConfigList", ignoreCase = true) ||
+                    key.equals("pbk", ignoreCase = true)
+                ) {
+                    decoded.replace(' ', '+')
+                } else {
+                    decoded
+                }
                 out.putIfAbsent(key, value)
             }
         }

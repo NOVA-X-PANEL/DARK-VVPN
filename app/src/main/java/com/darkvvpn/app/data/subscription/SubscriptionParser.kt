@@ -156,6 +156,7 @@ class SubscriptionParser(
                 LinkText.isTruthy(params["insecure"]) ||
                 LinkText.isTruthy(params["allowinsecure"]),
             alpn = params["alpn"]?.split(',')?.filter { it.isNotBlank() } ?: emptyList(),
+            echConfigList = (params["ech"] ?: params["echConfigList"])?.replace(' ', '+')?.takeIf { it.isNotBlank() },
             path = LinkText.normalisePath(params["path"]),
             hostHeader = params["host"] ?: params["hostheader"],
             headerType = params["headerType"] ?: params["headertype"] ?: params["type"]?.takeIf {
@@ -229,6 +230,7 @@ class SubscriptionParser(
                 LinkText.isTruthy(node.str("insecure")) ||
                 LinkText.isTruthy(node.str("skip-cert-verify")),
             alpn = node.str("alpn")?.split(',')?.filter { it.isNotBlank() } ?: emptyList(),
+            echConfigList = (node.str("ech") ?: node.str("echConfigList"))?.replace(' ', '+')?.takeIf { it.isNotBlank() },
             path = LinkText.normalisePath(node.str("path")),
             hostHeader = node.str("host")?.takeIf { it.isNotBlank() },
             headerType = node.str("type")?.takeIf { it.isNotBlank() && it != "none" },

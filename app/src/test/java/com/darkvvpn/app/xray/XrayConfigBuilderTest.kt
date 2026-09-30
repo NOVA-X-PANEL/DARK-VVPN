@@ -476,4 +476,16 @@ class XrayConfigBuilderTest {
         assertNotNull("dns-out routing rule must exist", dnsRule)
         assertEquals("53", dnsRule!!["port"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun `echConfigList is emitted in tlsSettings when present`() {
+        val node = baseVless().copy(
+            echConfigList = "AGX+TEST==",
+        )
+        val doc = success(node).document
+        val proxy = doc["outbounds"]!!.jsonArray[0].jsonObject
+        val tls = proxy["streamSettings"]!!.jsonObject["tlsSettings"]!!.jsonObject
+        assertEquals("AGX+TEST==", tls.str("echConfigList"))
+        assertNull("allowInsecure must not be emitted to Xray 26", tls["allowInsecure"])
+    }
 }
