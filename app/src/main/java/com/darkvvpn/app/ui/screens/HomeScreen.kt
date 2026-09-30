@@ -115,6 +115,10 @@ fun HomeScreen(
         pendingIntent?.let { permissionLauncher.launch(it) }
     }
 
+    LaunchedEffect(Unit) {
+        subscriptionsViewModel.refreshAll()
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
@@ -161,7 +165,7 @@ fun HomeScreen(
                             border = BorderStroke(0.5.dp, BrandBlue.copy(alpha = 0.35f)),
                         ) {
                             Text(
-                                text = "v1.7.9",
+                                text = "v${com.darkvvpn.app.BuildConfig.VERSION_NAME}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandBlue,
@@ -379,7 +383,12 @@ fun HomeScreen(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        activeSub?.let { subscriptionsViewModel.refresh(it.id) }
+                        onNavigateToSubscriptions()
+                    },
             ) {
                 Column(
                     modifier = Modifier

@@ -187,10 +187,9 @@ class SubscriptionRepository(
                         lastUpdatedEpochMillis = System.currentTimeMillis(),
                         lastError = null,
                         lastNodeCount = tagged.size,
-                        usedBytes = traffic?.usedBytes ?: existing.usedBytes,
-                        totalBytes = traffic?.totalBytes ?: existing.totalBytes,
-                        expiresAtEpochMillis = traffic?.expiresAtEpochMillis
-                            ?: existing.expiresAtEpochMillis,
+                        usedBytes = if (traffic != null) traffic.usedBytes else existing.usedBytes,
+                        totalBytes = if (traffic != null) traffic.totalBytes?.takeIf { it > 0 } else existing.totalBytes,
+                        expiresAtEpochMillis = if (traffic != null) traffic.expiresAtEpochMillis else existing.expiresAtEpochMillis,
                     )
                 }
             }
