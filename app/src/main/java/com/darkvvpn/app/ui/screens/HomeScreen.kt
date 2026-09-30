@@ -180,7 +180,7 @@ fun HomeScreen(
                             .size(34.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            .clickable { serversViewModel.measurePing() },
+                            .clickable { serversViewModel.measureAll() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -475,7 +475,7 @@ fun HomeScreen(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = BrandBlue,
-                        modifier = Modifier.clickable { serversViewModel.measurePing() },
+                        modifier = Modifier.clickable { serversViewModel.measureAll() },
                     )
                 }
 
