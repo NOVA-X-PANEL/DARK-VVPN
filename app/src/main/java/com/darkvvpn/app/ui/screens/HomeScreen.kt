@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -535,43 +536,18 @@ fun HomeScreen(
                                 )
                             }
                         } else {
-                            val displayServers = servers.take(5)
-                            displayServers.forEachIndexed { index, server ->
+                            servers.forEachIndexed { index, server ->
                                 val isSelected = server.id == (selectedServer?.id ?: selectedServerId)
                                 StreisandServerRow(
                                     server = server,
                                     selected = isSelected,
                                     onClick = { serversViewModel.select(server) },
                                 )
-                                if (index < displayServers.lastIndex || servers.size > 5) {
+                                if (index < servers.lastIndex) {
                                     HorizontalDivider(
                                         color = MaterialTheme.colorScheme.outlineVariant,
                                         thickness = 0.5.dp,
                                         modifier = Modifier.padding(start = 48.dp),
-                                    )
-                                }
-                            }
-
-                            if (servers.size > 5) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(onClick = onNavigateToServers)
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.home_see_all_servers, servers.size),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = BrandBlue,
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Filled.ChevronRight,
-                                        contentDescription = null,
-                                        tint = BrandBlue,
-                                        modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }
@@ -633,10 +609,12 @@ private fun StreisandServerRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = server.name,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textDirection = TextDirection.Content,
+                ),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
             Row(
@@ -646,7 +624,9 @@ private fun StreisandServerRow(
                 ProtocolChip(protocol = server.protocol)
                 Text(
                     text = server.displayLocation,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        textDirection = TextDirection.Content,
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
