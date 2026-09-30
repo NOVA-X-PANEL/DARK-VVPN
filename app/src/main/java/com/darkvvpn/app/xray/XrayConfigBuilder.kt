@@ -56,6 +56,8 @@ object XrayConfigBuilder {
     const val OUTBOUND_TAG_BLOCK = "block"
     const val OUTBOUND_TAG_DNS = "dns-out"
     const val INBOUND_TAG_TUN = "tun"
+    const val LOCAL_HTTP_PORT = 10809
+    const val LOCAL_SOCKS_PORT = 10808
 
     /**
      * Address handed to the device inside the tunnel, and the gateway the core's
@@ -151,6 +153,26 @@ object XrayConfigBuilder {
 
             putJsonArray("inbounds") {
                 add(buildTunInbound(mtu))
+                add(buildJsonObject {
+                    put("tag", "http-in")
+                    put("listen", "127.0.0.1")
+                    put("port", LOCAL_HTTP_PORT)
+                    put("protocol", "http")
+                    putJsonObject("settings") {
+                        put("userLevel", 8)
+                    }
+                })
+                add(buildJsonObject {
+                    put("tag", "socks-in")
+                    put("listen", "127.0.0.1")
+                    put("port", LOCAL_SOCKS_PORT)
+                    put("protocol", "socks")
+                    putJsonObject("settings") {
+                        put("auth", "noauth")
+                        put("udp", true)
+                        put("userLevel", 8)
+                    }
+                })
             }
 
             putJsonArray("outbounds") {
