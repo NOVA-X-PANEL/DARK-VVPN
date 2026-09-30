@@ -113,8 +113,8 @@ android {
         applicationId = "com.darkvvpn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.7.0"
+        versionCode = 13
+        versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -128,14 +128,25 @@ android {
         }
     }
 
+    signingConfigs {
+        create("common") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("common")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("common")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
