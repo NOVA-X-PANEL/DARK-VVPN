@@ -24,7 +24,6 @@ enum class TopLevelDestination(
     val icon: ImageVector,
 ) {
     HOME(Routes.HOME, R.string.nav_home, Icons.Filled.Shield),
-    SERVERS(Routes.SERVERS, R.string.nav_servers, Icons.Filled.Public),
     SUBSCRIPTIONS(Routes.SUBSCRIPTIONS, R.string.nav_subs, Icons.Filled.Cloud),
     SETTINGS(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings),
 }

@@ -113,8 +113,8 @@ android {
         applicationId = "com.darkvvpn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.8.3"
+        versionCode = 26
+        versionName = "1.8.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

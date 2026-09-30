@@ -53,9 +53,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.darkvvpn.app.R
+import com.darkvvpn.app.data.model.Subscription
 import com.darkvvpn.app.data.model.VpnServer
 import com.darkvvpn.app.data.model.VpnState
 import com.darkvvpn.app.ui.components.ConnectionFailureCard
@@ -378,180 +380,218 @@ fun HomeScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            // ---- 3. Subscription Quota Card (Streisand Style) ----
-            val activeSub = subscriptions.firstOrNull()
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        activeSub?.let { subscriptionsViewModel.refresh(it.id) }
-                        onNavigateToSubscriptions()
-                    },
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = activeSub?.name ?: stringResource(R.string.home_subscription_quota),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BrandGreen.copy(alpha = 0.15f),
-                        ) {
-                            val isUnlimitedTime = activeSub?.expiresAtEpochMillis == null ||
-                                activeSub.expiresAtEpochMillis <= 0L ||
-                                activeSub.expiresAtEpochMillis > (System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 5)
-
-                            val daysText = when {
-                                activeSub == null -> stringResource(R.string.home_no_subscription)
-                                isUnlimitedTime -> stringResource(R.string.home_time_unlimited)
-                                else -> {
-                                    val days = ((activeSub.expiresAtEpochMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
-                                    stringResource(R.string.home_days_remaining, days)
-                                }
-                            }
-                            Text(
-                                text = daysText,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandGreen,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
+            // ---- 3. Grouped Subscriptions & Server Lists (Streisand Signature) ----
+            val groupedServers: Map<Subscription?, List<VpnServer>> = remember(subscriptions, servers) {
+                if (subscriptions.isEmpty()) {
+                    mapOf(null to servers)
+                } else if (subscriptions.size == 1) {
+                    mapOf(subscriptions.first() to servers)
+                } else {
+                    val subMap = subscriptions.associateBy { it.id }
+                    val map = linkedMapOf<Subscription?, MutableList<VpnServer>>()
+                    for (sub in subscriptions) {
+                        map[sub] = mutableListOf()
                     }
-
-                    val hasQuota = activeSub?.totalBytes != null && activeSub.totalBytes > 0L
-                    if (hasQuota) {
-                        val progress = activeSub?.quotaUsedFraction ?: 0f
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = BrandBlue,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            strokeCap = StrokeCap.Round,
-                        )
+                    for (server in servers) {
+                        val sub = server.subscriptionId?.let { subMap[it] }
+                        map.getOrPut(sub) { mutableListOf() }.add(server)
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val usedStr = activeSub?.usedBytes?.let { Formatters.bytes(it) }
-                        val totalStr = activeSub?.totalBytes?.let { Formatters.bytes(it) }
-
-                        val quotaText = when {
-                            activeSub == null -> stringResource(R.string.home_no_subscription)
-                            !hasQuota -> {
-                                if (usedStr != null) {
-                                    stringResource(R.string.home_quota_used_unlimited, usedStr)
-                                } else {
-                                    stringResource(R.string.home_quota_unlimited)
-                                }
-                            }
-                            else -> stringResource(R.string.subs_quota, usedStr ?: "0 B", totalStr ?: "—")
-                        }
-                        Text(
-                            text = quotaText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = stringResource(R.string.home_nodes_count, servers.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    map
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
-
-            // ---- 4. Inset Grouped Server List (Streisand Signature) ----
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.servers_title) + " (" + stringResource(R.string.home_nodes_count, servers.size) + ")",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = stringResource(R.string.home_test_ping),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BrandBlue,
-                        modifier = Modifier.clickable { serversViewModel.measureAll() },
-                    )
-                }
-
+            if (subscriptions.isEmpty() && servers.isEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        if (servers.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(onClick = onNavigateToSubscriptions)
-                                    .padding(20.dp),
-                                contentAlignment = Alignment.Center,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateToSubscriptions)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.servers_empty_action),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandBlue,
+                        )
+                    }
+                }
+            } else {
+                groupedServers.forEach { (sub, subServers) ->
+                    if (sub != null) {
+                        // Section Header for this Subscription
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val subTitle = sub.name.ifBlank {
+                                try {
+                                    android.net.Uri.parse(sub.url).host.orEmpty()
+                                } catch (_: Exception) { "" }
+                            }.ifBlank { stringResource(R.string.nav_subs) }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
-                                    text = stringResource(R.string.servers_empty_action),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = subTitle,
+                                    style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = BrandBlue,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
-                            }
-                        } else {
-                            servers.forEachIndexed { index, server ->
-                                val isSelected = server.id == (selectedServer?.id ?: selectedServerId)
-                                StreisandServerRow(
-                                    server = server,
-                                    selected = isSelected,
-                                    onClick = { serversViewModel.select(server) },
-                                )
-                                if (index < servers.lastIndex) {
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outlineVariant,
-                                        thickness = 0.5.dp,
-                                        modifier = Modifier.padding(start = 48.dp),
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = BrandBlue.copy(alpha = 0.12f),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.home_nodes_count, subServers.size),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandBlue,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }
                             }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.home_test_ping),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandBlue,
+                                    modifier = Modifier.clickable { serversViewModel.measureAll() },
+                                )
+                                Text(
+                                    text = stringResource(R.string.subs_refresh),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandBlue,
+                                    modifier = Modifier.clickable { subscriptionsViewModel.refresh(sub.id) },
+                                )
+                            }
                         }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Subscription Traffic Tracker Card
+                        SubscriptionTrafficCard(
+                            sub = sub,
+                            nodeCount = subServers.size,
+                            onClick = {
+                                subscriptionsViewModel.refresh(sub.id)
+                                onNavigateToSubscriptions()
+                            },
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // Inset Grouped Server List Card for this subscription
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (subServers.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.servers_empty),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                } else {
+                                    subServers.forEachIndexed { index, server ->
+                                        val isSelected = server.id == (selectedServer?.id ?: selectedServerId)
+                                        StreisandServerRow(
+                                            server = server,
+                                            selected = isSelected,
+                                            onClick = { serversViewModel.select(server) },
+                                        )
+                                        if (index < subServers.lastIndex) {
+                                            HorizontalDivider(
+                                                color = MaterialTheme.colorScheme.outlineVariant,
+                                                thickness = 0.5.dp,
+                                                modifier = Modifier.padding(start = 48.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(18.dp))
+                    } else if (subServers.isNotEmpty()) {
+                        // Orphan / manual servers
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.servers_title) + " (" + stringResource(R.string.home_nodes_count, subServers.size) + ")",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = stringResource(R.string.home_test_ping),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandBlue,
+                                modifier = Modifier.clickable { serversViewModel.measureAll() },
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                subServers.forEachIndexed { index, server ->
+                                    val isSelected = server.id == (selectedServer?.id ?: selectedServerId)
+                                    StreisandServerRow(
+                                        server = server,
+                                        selected = isSelected,
+                                        onClick = { serversViewModel.select(server) },
+                                    )
+                                    if (index < subServers.lastIndex) {
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                            thickness = 0.5.dp,
+                                            modifier = Modifier.padding(start = 48.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(18.dp))
                     }
                 }
             }
@@ -609,10 +649,12 @@ private fun StreisandServerRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = server.name,
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.sp,
                     textDirection = TextDirection.Content,
                 ),
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -625,6 +667,7 @@ private fun StreisandServerRow(
                 Text(
                     text = server.displayLocation,
                     style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.5.sp,
                         textDirection = TextDirection.Content,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -637,6 +680,116 @@ private fun StreisandServerRow(
         Spacer(Modifier.width(8.dp))
 
         PingBadge(pingMs = server.pingMs)
+    }
+}
+
+@Composable
+private fun SubscriptionTrafficCard(
+    sub: Subscription,
+    nodeCount: Int,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val hostName = try {
+                    android.net.Uri.parse(sub.url).host.orEmpty()
+                } catch (_: Exception) { "" }.ifBlank { sub.name }
+
+                Text(
+                    text = hostName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = BrandGreen.copy(alpha = 0.15f),
+                ) {
+                    val isUnlimitedTime = sub.expiresAtEpochMillis == null ||
+                        sub.expiresAtEpochMillis <= 0L ||
+                        sub.expiresAtEpochMillis > (System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 5)
+
+                    val daysText = when {
+                        isUnlimitedTime -> stringResource(R.string.home_time_unlimited)
+                        else -> {
+                            val days = ((sub.expiresAtEpochMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
+                            stringResource(R.string.home_days_remaining, days)
+                        }
+                    }
+                    Text(
+                        text = daysText,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandGreen,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+
+            val hasQuota = sub.totalBytes != null && sub.totalBytes > 0L
+            if (hasQuota) {
+                val progress = sub.quotaUsedFraction ?: 0f
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = BrandBlue,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    strokeCap = StrokeCap.Round,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val usedStr = sub.usedBytes?.let { Formatters.bytes(it) }
+                val totalStr = sub.totalBytes?.let { Formatters.bytes(it) }
+
+                val quotaText = when {
+                    !hasQuota -> {
+                        if (usedStr != null) {
+                            stringResource(R.string.home_quota_used_unlimited, usedStr)
+                        } else {
+                            stringResource(R.string.home_quota_unlimited)
+                        }
+                    }
+                    else -> stringResource(R.string.subs_quota, usedStr ?: "0 B", totalStr ?: "—")
+                }
+                Text(
+                    text = quotaText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = if (sub.enabled) stringResource(R.string.subs_status_ok) else stringResource(R.string.subs_status_disabled),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
