@@ -14,8 +14,16 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.zip.GZIPInputStream
 import java.util.zip.InflaterInputStream
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 /**
  * A subscription as it is persisted. Kept separate from the domain model so the
@@ -526,6 +534,10 @@ class HttpFetcher(
             connection = (parsed.openConnection() as? HttpURLConnection)
                 ?: return RawResponse(error = "That URL cannot be fetched.")
 
+            if (connection is HttpsURLConnection) {
+                configureLenientSsl(connection)
+            }
+
             connection.connectTimeout = connectTimeoutMillis
             connection.readTimeout = readTimeoutMillis
             connection.requestMethod = "GET"
@@ -634,8 +646,28 @@ class HttpFetcher(
         val error: String? = null,
     )
 
+    private fun configureLenientSsl(connection: HttpsURLConnection) {
+        runCatching {
+            connection.sslSocketFactory = lenientSocketFactory
+            connection.hostnameVerifier = lenientHostnameVerifier
+        }
+    }
+
     companion object {
         private const val TAG = "HttpFetcher"
+
+        private val lenientSocketFactory: SSLSocketFactory by lazy {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+            })
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, SecureRandom())
+            sslContext.socketFactory
+        }
+
+        private val lenientHostnameVerifier = HostnameVerifier { _, _ -> true }
 
         /** ~4 MB, applied after decompression. Far more than any real node list. */
         const val MAX_BODY_BYTES = 4 * 1024 * 1024

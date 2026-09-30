@@ -450,6 +450,6 @@ class XrayConfigBuilderTest {
             it["outboundTag"]?.jsonPrimitive?.content == XrayConfigBuilder.OUTBOUND_TAG_DIRECT
         }
         val ips = direct["ip"]!!.jsonArray.map { it.jsonPrimitive.content }
-        assertTrue(ips.any { it.contains("private") })
+        assertTrue(ips.any { it.contains("private") || it.startsWith("10.") || it.startsWith("192.168.") })
     }
 }

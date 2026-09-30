@@ -128,9 +128,10 @@ class SubscriptionParser(
         val userInfo = if (at >= 0) afterScheme.substring(0, at) else ""
         val hostPart = if (at >= 0) afterScheme.substring(at + 1) else afterScheme
 
-        val (hostPort, rawQuery) = hostPart.split('?', limit = 2).let {
+        val (rawHostPort, rawQuery) = hostPart.split('?', limit = 2).let {
             it[0] to it.getOrNull(1)
         }
+        val hostPort = rawHostPort.trim().trimEnd('/')
         val host = parseHost(hostPort) ?: return null
         val port = parsePort(hostPort) ?: protocol.defaultPort
         val params = LinkText.queryParams(rawQuery)
@@ -557,22 +558,22 @@ class SubscriptionParser(
 
     /** Host from a `host:port` pair, unwrapping `[::1]:443` IPv6 literals. */
     private fun parseHost(hostPort: String): String? {
-        val h = hostPort.substringBefore('?').trim()
+        val h = hostPort.substringBefore('?').trim().trimEnd('/')
         if (h.isEmpty()) return null
         if (h.startsWith("[")) {
             val end = h.indexOf(']')
             if (end < 0) return null
             return h.substring(1, end).ifBlank { null }
         }
-        val host = h.substringBefore(':')
+        val host = h.substringBefore(':').trimEnd('/')
         return host.ifBlank { null }
     }
 
     private fun parsePort(hostPort: String): Int? {
-        val h = hostPort.substringBefore('?').trim()
+        val h = hostPort.substringBefore('?').trim().trimEnd('/')
         val idx = h.lastIndexOf(':')
         if (idx < 0 || idx == h.length - 1) return null
-        return h.substring(idx + 1).toIntOrNull()?.takeIf { it in 1..65535 }
+        return h.substring(idx + 1).trimEnd('/').toIntOrNull()?.takeIf { it in 1..65535 }
     }
 
     private fun stripQuotes(s: String): String =

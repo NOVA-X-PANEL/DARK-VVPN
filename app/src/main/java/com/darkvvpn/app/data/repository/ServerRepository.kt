@@ -62,6 +62,7 @@ class ServerRepository {
         fromSubscriptions.value = nodes
         recompute()
         pruneSelection()
+        selectFirstIfNone()
     }
 
     /** Adds nodes the user pasted in. Nodes already present are not duplicated. */

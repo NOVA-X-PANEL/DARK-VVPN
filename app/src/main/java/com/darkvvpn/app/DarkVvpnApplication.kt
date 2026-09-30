@@ -13,6 +13,10 @@ import com.darkvvpn.app.data.update.UpdateDownloader
 import com.darkvvpn.app.data.update.UpdateHttp
 import com.darkvvpn.app.data.update.UpdateInstaller
 import com.darkvvpn.app.util.NetworkState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -72,5 +76,17 @@ class DarkVvpnApplication : Application() {
         // Prime the connectivity flag the subscription scheduler reads. It is
         // re-read on resume; this only avoids a bogus "metered" answer at startup.
         NetworkState.prime(this)
+
+        // Preload subscriptions from disk on startup so servers appear immediately
+        // on the home screen without needing to navigate to Subscriptions first.
+        CoroutineScope(Dispatchers.IO).launch {
+            container.subscriptionRepository.load()
+            val nodes = container.subscriptionRepository.allNodes()
+            if (nodes.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    container.serverRepository.replaceSubscriptionNodes(nodes)
+                }
+            }
+        }
     }
 }

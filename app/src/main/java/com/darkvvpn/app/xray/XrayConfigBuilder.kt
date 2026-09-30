@@ -68,7 +68,7 @@ object XrayConfigBuilder {
     const val TUN_MTU = 1500
 
     /** Resolver the device is told to use; queries travel through the tunnel. */
-    val TUN_DNS_SERVERS = listOf("1.1.1.1", "1.0.0.1")
+    val TUN_DNS_SERVERS = listOf("1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4")
 
     /**
      * @param server the node to dial.
@@ -136,17 +136,17 @@ object XrayConfigBuilder {
                     // ORDER MATTERS: Xray stops at the first matching rule, so
                     // every specific rule must precede the catch-all. Putting the
                     // catch-all first would silently disable the ad blocker.
-                    /*
                     if (blockAds) {
                         add(buildJsonObject {
                             put("type", "field")
                             put("outboundTag", OUTBOUND_TAG_BLOCK)
                             putJsonArray("domain") {
-                                add("geosite:category-ads-all")
+                                add("keyword:ads")
+                                add("domain:doubleclick.net")
+                                add("domain:adservice.google.com")
                             }
                         })
                     }
-                    */
 
                     // Loopback and link-local traffic stays off the tunnel, so a
                     // LAN device (a printer, a NAS) is still reachable.
@@ -304,6 +304,9 @@ object XrayConfigBuilder {
                         }
                     }
                 }
+                // packetEncoding enables XUDP encapsulation over TCP for VLESS.
+                // Without this, UDP flows (such as DNS requests) stall or fail.
+                put("packetEncoding", "xudp")
             }
         }
 
@@ -317,11 +320,12 @@ object XrayConfigBuilder {
                             addJsonObject {
                                 put("id", server.uuid.orEmpty())
                                 put("alterId", server.alterId)
-                                put("security", server.vmessSecurity)
+                                put("security", server.vmessSecurity ?: "auto")
                             }
                         }
                     }
                 }
+                put("packetEncoding", "xudp")
             }
         }
 
@@ -334,6 +338,7 @@ object XrayConfigBuilder {
                         put("password", server.password.orEmpty())
                     }
                 }
+                put("packetEncoding", "xudp")
             }
         }
 

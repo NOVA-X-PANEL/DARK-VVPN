@@ -28,7 +28,7 @@ internal object HostValidator {
      * address, which is what the placeholder above is.
      */
     fun isDialable(host: String?): Boolean {
-        val h = host?.trim()?.trim('[', ']').orEmpty()
+        val h = host?.trim()?.trimEnd('/')?.trim('[', ']').orEmpty()
         if (h.isEmpty()) return false
         // A hostname of one character is not a name; it is a placeholder.
         if (h.length < 3) return false

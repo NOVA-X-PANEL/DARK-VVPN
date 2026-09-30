@@ -52,12 +52,17 @@ import com.darkvvpn.app.ui.components.ConnectionOrb
 import com.darkvvpn.app.ui.components.CountryAvatar
 import com.darkvvpn.app.ui.components.SectionHeader
 import com.darkvvpn.app.ui.components.StatTile
+import com.darkvvpn.app.ui.components.YellowUpdateBadge
 import com.darkvvpn.app.util.Formatters
+import com.darkvvpn.app.viewmodel.UpdateUiState
+import com.darkvvpn.app.viewmodel.UpdateViewModel
 import com.darkvvpn.app.viewmodel.VpnViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 fun HomeScreen(
     onNavigateToServers: () -> Unit,
+    updateViewModel: UpdateViewModel? = null,
     viewModel: VpnViewModel = viewModel(factory = VpnViewModel.Factory),
 ) {
     val context = LocalContext.current
@@ -65,6 +70,8 @@ fun HomeScreen(
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val pendingIntent by viewModel.pendingPermissionIntent.collectAsStateWithLifecycle()
+    val updateBadge by (updateViewModel?.badge ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
+    val updateState by (updateViewModel?.state ?: MutableStateFlow(UpdateUiState.Hidden)).collectAsStateWithLifecycle()
 
     // The failures worth reading: a fetch that names the problem, or a core that
     // refused to start. Held until dismissed, and copyable.
@@ -108,6 +115,22 @@ fun HomeScreen(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
             )
+
+            if (updateBadge != null || updateState is UpdateUiState.Available) {
+                Spacer(Modifier.height(10.dp))
+                YellowUpdateBadge(
+                    badge = updateBadge,
+                    state = updateState,
+                    onClick = {
+                        val current = updateState
+                        if (current is UpdateUiState.Available && current.readyToInstall != null) {
+                            updateViewModel?.install()
+                        } else {
+                            updateViewModel?.openSheet()
+                        }
+                    },
+                )
+            }
 
             failure?.let { message ->
                 Spacer(Modifier.height(14.dp))

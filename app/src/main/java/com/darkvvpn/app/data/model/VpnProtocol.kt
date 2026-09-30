@@ -154,10 +154,11 @@ enum class VpnTransport(val wireName: String, val label: String) {
 enum class VlessFlow(val wireName: String, val label: String) {
     NONE("", "None"),
     VISION("xtls-rprx-vision", "Vision"),
+    VISION_UDP443("xtls-rprx-vision-udp443", "Vision (UDP 443)"),
     ;
 
     companion object {
         fun fromName(name: String?): VlessFlow =
-            entries.firstOrNull { it.wireName == name?.trim() } ?: NONE
+            entries.firstOrNull { it.wireName.equals(name?.trim(), ignoreCase = true) } ?: NONE
     }
 }

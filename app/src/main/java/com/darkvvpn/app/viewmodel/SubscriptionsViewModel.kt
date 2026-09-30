@@ -226,21 +226,27 @@ class SubscriptionsViewModel(
         viewModelScope.launch {
             _import.update { it.copy(isWorking = true, error = null) }
 
-            if (looksLikeShareLinkList(input)) {
+            val isWebUrl = input.startsWith("http://", ignoreCase = true) ||
+                input.startsWith("https://", ignoreCase = true)
+
+            if (!isWebUrl || looksLikeShareLinkList(input)) {
                 val servers = repository.importLinks(input)
-                if (servers.isEmpty()) {
+                if (servers.isNotEmpty()) {
+                    serverRepository.addImported(servers)
+                    serverRepository.selectFirstIfNone()
+                    _import.value = ImportState()
+                    _message.value = SubscriptionMessage(
+                        "Imported ${servers.size} node(s).",
+                        isError = false,
+                    )
+                    return@launch
+                }
+                if (!isWebUrl) {
                     _import.update {
                         it.copy(isWorking = false, error = "No usable node was found in that text.")
                     }
                     return@launch
                 }
-                serverRepository.addImported(servers)
-                _import.value = ImportState()
-                _message.value = SubscriptionMessage(
-                    "Imported ${servers.size} node(s).",
-                    isError = false,
-                )
-                return@launch
             }
 
             val subscription = repository.add(name = state.nameInput, url = input, autoUpdate = state.autoUpdate)
@@ -297,6 +303,7 @@ class SubscriptionsViewModel(
     /** Pushes the merged node list into the catalogue the Servers screen reads. */
     private fun publishNodes() {
         serverRepository.replaceSubscriptionNodes(repository.allNodes())
+        serverRepository.selectFirstIfNone()
     }
 
     private fun looksLikeShareLinkList(input: String): Boolean =
