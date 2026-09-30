@@ -784,7 +784,7 @@ private fun SubscriptionTrafficCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = if (sub.enabled) stringResource(R.string.subs_status_ok) else stringResource(R.string.subs_status_disabled),
+                    text = stringResource(R.string.home_nodes_count, nodeCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
