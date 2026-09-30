@@ -84,13 +84,15 @@ internal object LinkText {
     }
 
     /**
-     * Splits `#fragment`, tolerating remarks that themselves contain `#`.
-     * The fragment is the *last* `#` segment; everything before it is the rest.
+     * Splits `#fragment`. The fragment is everything after the first `#`;
+     * everything before it is the rest of the URI.
      */
     fun splitFragment(link: String): Pair<String, String?> {
-        val idx = link.lastIndexOf('#')
+        val idx = link.indexOf('#')
         if (idx < 0) return link to null
-        return link.substring(0, idx) to decode(link.substring(idx + 1))
+        val rawFragment = link.substring(idx + 1)
+        val decoded = decode(rawFragment).trim()
+        return link.substring(0, idx) to decoded.ifBlank { null }
     }
 
     /**

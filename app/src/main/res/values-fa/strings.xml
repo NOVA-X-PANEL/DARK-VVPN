@@ -117,6 +117,9 @@
     <string name="home_no_subscription">هنوز اشتراکی افزوده نشده</string>
     <string name="home_days_remaining">%1$d روز مانده</string>
     <string name="home_nodes_count">%1$d سرور آنلاین</string>
+    <string name="home_time_unlimited">زمان نامحدود</string>
+    <string name="home_quota_unlimited">حجم نامحدود</string>
+    <string name="home_quota_used_unlimited">مصرف: %1$s (نامحدود)</string>
 
     <!-- Servers -->
     <string name="servers_title">سرورها</string>

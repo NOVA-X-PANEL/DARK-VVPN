@@ -50,10 +50,10 @@ class LinkTextTest {
     }
 
     @Test
-    fun `takes the last hash so a remark may contain one`() {
+    fun `preserves hashes inside remark`() {
         val (head, remark) = LinkText.splitFragment("vless://a@b:443#part1#part2")
-        assertEquals("vless://a@b:443#part1", head)
-        assertEquals("part2", remark)
+        assertEquals("vless://a@b:443", head)
+        assertEquals("part1#part2", remark)
     }
 
     @Test

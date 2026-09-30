@@ -267,14 +267,15 @@ fun HomeScreen(
                         }
 
                         val subLabel = when {
-                            state.isConnected -> stringResource(R.string.home_session_duration, Formatters.duration(stats.sessionSeconds))
-                            else -> selectedServer?.displayLocation ?: stringResource(R.string.home_no_server)
+                            state.isConnected -> selectedServer?.let { "${it.name} • ${Formatters.duration(stats.sessionSeconds)}" }
+                                ?: stringResource(R.string.home_session_duration, Formatters.duration(stats.sessionSeconds))
+                            else -> selectedServer?.name ?: stringResource(R.string.home_no_server)
                         }
                         Text(
                             text = subLabel,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
 
@@ -396,16 +397,24 @@ fun HomeScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = BrandGreen.copy(alpha = 0.15f),
                         ) {
-                            val daysText = if (activeSub?.expiresAtEpochMillis != null) {
-                                val days = ((activeSub.expiresAtEpochMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
-                                stringResource(R.string.home_days_remaining, days)
-                            } else {
-                                stringResource(R.string.home_days_remaining, 24)
+                            val isUnlimitedTime = activeSub?.expiresAtEpochMillis == null ||
+                                activeSub.expiresAtEpochMillis <= 0L ||
+                                activeSub.expiresAtEpochMillis > (System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 5)
+
+                            val daysText = when {
+                                activeSub == null -> stringResource(R.string.home_no_subscription)
+                                isUnlimitedTime -> stringResource(R.string.home_time_unlimited)
+                                else -> {
+                                    val days = ((activeSub.expiresAtEpochMillis - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
+                                    stringResource(R.string.home_days_remaining, days)
+                                }
                             }
                             Text(
                                 text = daysText,
@@ -417,27 +426,42 @@ fun HomeScreen(
                         }
                     }
 
-                    val progress = activeSub?.quotaUsedFraction ?: 0.65f
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = BrandBlue,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        strokeCap = StrokeCap.Round,
-                    )
+                    val hasQuota = activeSub?.totalBytes != null && activeSub.totalBytes > 0L
+                    if (hasQuota) {
+                        val progress = activeSub?.quotaUsedFraction ?: 0f
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = BrandBlue,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            strokeCap = StrokeCap.Round,
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        val usedStr = Formatters.bytes(activeSub?.usedBytes ?: (65L * 1024 * 1024 * 1024))
-                        val totalStr = Formatters.bytes(activeSub?.totalBytes ?: (100L * 1024 * 1024 * 1024))
+                        val usedStr = activeSub?.usedBytes?.let { Formatters.bytes(it) }
+                        val totalStr = activeSub?.totalBytes?.let { Formatters.bytes(it) }
+
+                        val quotaText = when {
+                            activeSub == null -> stringResource(R.string.home_no_subscription)
+                            !hasQuota -> {
+                                if (usedStr != null) {
+                                    stringResource(R.string.home_quota_used_unlimited, usedStr)
+                                } else {
+                                    stringResource(R.string.home_quota_unlimited)
+                                }
+                            }
+                            else -> stringResource(R.string.subs_quota, usedStr ?: "0 B", totalStr ?: "—")
+                        }
                         Text(
-                            text = "مصرف: $usedStr از $totalStr",
+                            text = quotaText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -603,7 +627,7 @@ private fun StreisandServerRow(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Row(

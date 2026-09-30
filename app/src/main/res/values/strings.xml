@@ -117,6 +117,9 @@
     <string name="home_no_subscription">No active subscription</string>
     <string name="home_days_remaining">%1$d days remaining</string>
     <string name="home_nodes_count">%1$d online nodes</string>
+    <string name="home_time_unlimited">Unlimited time</string>
+    <string name="home_quota_unlimited">Unlimited traffic</string>
+    <string name="home_quota_used_unlimited">Used: %1$s (Unlimited)</string>
 
     <!-- Servers -->
     <string name="servers_title">Servers</string>
