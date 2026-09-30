@@ -189,7 +189,7 @@ fun HomeScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            SectionHeader(title = "Session")
+            SectionHeader(title = stringResource(R.string.home_session))
 
             Spacer(Modifier.height(10.dp))
 
@@ -266,8 +266,13 @@ private fun SelectedServerCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            val pingText = when {
+                ping == null -> "—"
+                ping < 0 -> stringResource(R.string.servers_ping_timeout)
+                else -> "$ping ms"
+            }
             Text(
-                text = Formatters.ping(ping),
+                text = pingText,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

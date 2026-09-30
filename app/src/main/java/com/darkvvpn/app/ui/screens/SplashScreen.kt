@@ -93,7 +93,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 modifier = Modifier.padding(top = 22.dp),
             )
             Text(
-                text = "Secure • Private • Fast",
+                text = stringResource(R.string.splash_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),

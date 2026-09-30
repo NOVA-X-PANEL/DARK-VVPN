@@ -32,9 +32,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.darkvvpn.app.R
 import com.darkvvpn.app.viewmodel.UpdateBadge
 import com.darkvvpn.app.viewmodel.UpdateUiState
 
@@ -75,12 +77,16 @@ fun YellowUpdateBadge(
     val versionText = badge?.version ?: (state as? UpdateUiState.Available)?.release?.versionName ?: ""
 
     val labelText = when {
-        readyToInstall -> "نصب آپدیت v$versionText (Install)"
+        readyToInstall -> stringResource(R.string.update_badge_install, versionText)
         isDownloading -> {
             val pct = downloadFraction?.let { (it * 100).toInt() }
-            if (pct != null) "در حال دانلود $pct%..." else "در حال دانلود..."
+            if (pct != null) {
+                stringResource(R.string.update_badge_downloading_pct, pct)
+            } else {
+                stringResource(R.string.update_badge_downloading)
+            }
         }
-        else -> "آپدیت نسخه v$versionText (Update)"
+        else -> stringResource(R.string.update_badge_available, versionText)
     }
 
     Box(

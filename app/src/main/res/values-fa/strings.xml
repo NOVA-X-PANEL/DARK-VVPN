@@ -58,6 +58,10 @@
     <string name="update_banner_body">برای مشاهده تغییرات و نصب لمس کنید.</string>
     <string name="update_banner_body_prerelease">نسخه پیش‌نمایش. برای جزئیات لمس کنید.</string>
     <string name="update_banner_action">آپدیت</string>
+    <string name="update_badge_install">نصب به‌روزرسانی v%1$s</string>
+    <string name="update_badge_downloading_pct">در حال دریافت %1$d٪…</string>
+    <string name="update_badge_downloading">در حال دریافت…</string>
+    <string name="update_badge_available">به‌روزرسانی به نسخه v%1$s</string>
     <string name="update_uptodate_title">برنامه به‌روز است</string>
     <string name="update_check_failed_title">خطا در بررسی آپدیت</string>
     <string name="update_checking_body">در حال ارتباط با گیت‌هاب جهت دریافت اطلاعات نسخه…</string>
@@ -99,6 +103,7 @@
     <string name="home_download">دانلود</string>
     <string name="home_upload">آپلود</string>
     <string name="home_duration">مدت زمان</string>
+    <string name="home_session">اطلاعات اتصال</string>
     <string name="home_no_server">هیچ سروری انتخاب نشده</string>
 
     <!-- Servers -->
@@ -126,12 +131,26 @@
     <string name="settings_language_en">English</string>
     <string name="settings_about">درباره برنامه</string>
     <string name="settings_auto_connect">اتصال خودکار هنگام اجرا</string>
+    <string name="settings_auto_connect_desc">اتصال خودکار تونل به محض باز شدن برنامه</string>
     <string name="settings_kill_switch">سوئیچ قطع اضطراری (Kill switch)</string>
+    <string name="settings_kill_switch_desc">قطع کامل ترافیک اینترنت در صورت قطع اتصال تونل</string>
+    <string name="settings_block_ads">مسدودسازی تبلیغات و ردیاب‌ها</string>
+    <string name="settings_block_ads_desc">فیلتر و مسدودسازی دامنه‌های تبلیغاتی در تونل</string>
+    <string name="settings_sort_ping">مرتب‌سازی بر اساس پینگ</string>
+    <string name="settings_sort_ping_desc">نمایش سریع‌ترین سرورها در بالای لیست</string>
+    <string name="settings_sub_wifi_only_desc">عدم به‌روزرسانی خودکار روی دیتای همراه (فقط وای‌فای)</string>
+    <string name="settings_merge_duplicates">ادغام سرورهای تکراری</string>
+    <string name="settings_merge_duplicates_desc">جایگزینی نود به‌روزرسانی‌شده به جای ثبت مجدد آن</string>
+    <string name="settings_update_on_launch_desc">بررسی آرام و بی‌صدا در پس‌زمینه</string>
+    <string name="settings_update_prerelease_desc">دریافت نسخه‌های آزمایشی و پیش‌نمایش علاوه بر نسخه‌های پایدار</string>
     <string name="settings_dark_theme">پوسته تیره (Dark theme)</string>
+    <string name="settings_dark_theme_desc">طراحی اختصاصی و نئونی DARK VVPN</string>
     <string name="settings_dynamic_color">رنگ پویا بر اساس کاغذدیواری</string>
+    <string name="settings_dynamic_color_desc">هماهنگی خودکار رنگ‌ها با تصویر زمینه گوشی (اندروید ۱۲+)</string>
     <string name="settings_version">نسخه برنامه</string>
     <string name="settings_core_version">هسته ترافیک</string>
     <string name="settings_developer">توسعه‌دهنده</string>
+    <string name="splash_tagline">امن • خصوصی • سریع</string>
 
     <!-- Diagnostics -->
     <string name="settings_diagnostics">گزارش‌های هسته</string>

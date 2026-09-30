@@ -58,6 +58,10 @@
     <string name="update_banner_body">Tap to see what changed and install it.</string>
     <string name="update_banner_body_prerelease">A pre-release. Tap to see the notes.</string>
     <string name="update_banner_action">Update</string>
+    <string name="update_badge_install">Install update v%1$s</string>
+    <string name="update_badge_downloading_pct">Downloading %1$d%%…</string>
+    <string name="update_badge_downloading">Downloading…</string>
+    <string name="update_badge_available">Update to v%1$s</string>
     <string name="update_uptodate_title">Up to date</string>
     <string name="update_check_failed_title">Update check failed</string>
     <string name="update_checking_body">Contacting GitHub for the latest release…</string>
@@ -99,6 +103,7 @@
     <string name="home_download">Download</string>
     <string name="home_upload">Upload</string>
     <string name="home_duration">Duration</string>
+    <string name="home_session">Session</string>
     <string name="home_no_server">No server selected</string>
 
     <!-- Servers -->
@@ -126,12 +131,26 @@
     <string name="settings_language_en">English</string>
     <string name="settings_about">About</string>
     <string name="settings_auto_connect">Auto-connect on launch</string>
+    <string name="settings_auto_connect_desc">Start the tunnel as soon as the app opens</string>
     <string name="settings_kill_switch">Kill switch</string>
+    <string name="settings_kill_switch_desc">Block traffic if the tunnel drops</string>
+    <string name="settings_block_ads">Block ads &amp; trackers</string>
+    <string name="settings_block_ads_desc">Filter known ad hosts through the tunnel</string>
+    <string name="settings_sort_ping">Sort servers by latency</string>
+    <string name="settings_sort_ping_desc">Show the fastest node first</string>
+    <string name="settings_sub_wifi_only_desc">Skip scheduled refreshes on mobile data</string>
+    <string name="settings_merge_duplicates">Merge duplicate nodes</string>
+    <string name="settings_merge_duplicates_desc">Replace a node in place instead of adding it twice</string>
+    <string name="settings_update_on_launch_desc">Checks quietly in the background</string>
+    <string name="settings_update_prerelease_desc">Offer pre-releases as well as stable versions</string>
     <string name="settings_dark_theme">Dark theme</string>
+    <string name="settings_dark_theme_desc">DARK VVPN is dark-first by design</string>
     <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_desc">Follow the system wallpaper (Android 12+)</string>
     <string name="settings_version">Version</string>
     <string name="settings_core_version">Tunnel core</string>
     <string name="settings_developer">Developer</string>
+    <string name="splash_tagline">Secure • Private • Fast</string>
 
     <!-- Diagnostics -->
     <string name="settings_diagnostics">Diagnostics</string>

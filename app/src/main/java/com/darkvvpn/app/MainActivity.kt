@@ -85,7 +85,12 @@ class MainActivity : ComponentActivity() {
                 c
             }
 
+            val localizedContext = remember(locale, config) {
+                activity.createConfigurationContext(config)
+            }
+
             CompositionLocalProvider(
+                LocalContext provides localizedContext,
                 LocalConfiguration provides config,
                 LocalLayoutDirection provides layoutDirection,
                 LocalActivityResultRegistryOwner provides this@MainActivity,

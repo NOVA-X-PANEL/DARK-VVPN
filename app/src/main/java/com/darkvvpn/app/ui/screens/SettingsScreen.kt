@@ -104,28 +104,28 @@ fun SettingsScreen(
         SettingsCard {
             SettingRow(
                 title = stringResource(R.string.settings_auto_connect),
-                subtitle = "Start the tunnel as soon as the app opens",
+                subtitle = stringResource(R.string.settings_auto_connect_desc),
                 checked = settings.autoConnectOnLaunch,
                 onCheckedChange = viewModel::setAutoConnect,
             )
             RowDivider()
             SettingRow(
                 title = stringResource(R.string.settings_kill_switch),
-                subtitle = "Block traffic if the tunnel drops",
+                subtitle = stringResource(R.string.settings_kill_switch_desc),
                 checked = settings.killSwitch,
                 onCheckedChange = viewModel::setKillSwitch,
             )
             RowDivider()
             SettingRow(
-                title = "Block ads & trackers",
-                subtitle = "Filter known ad hosts through the tunnel",
+                title = stringResource(R.string.settings_block_ads),
+                subtitle = stringResource(R.string.settings_block_ads_desc),
                 checked = settings.blockAdsAndTrackers,
                 onCheckedChange = viewModel::setBlockAds,
             )
             RowDivider()
             SettingRow(
-                title = "Sort servers by latency",
-                subtitle = "Show the fastest node first",
+                title = stringResource(R.string.settings_sort_ping),
+                subtitle = stringResource(R.string.settings_sort_ping_desc),
                 checked = settings.sortServersByPing,
                 onCheckedChange = viewModel::setSortByPing,
             )
@@ -152,14 +152,14 @@ fun SettingsScreen(
             RowDivider()
             SettingRow(
                 title = stringResource(R.string.settings_sub_wifi_only),
-                subtitle = "Skip scheduled refreshes on mobile data",
+                subtitle = stringResource(R.string.settings_sub_wifi_only_desc),
                 checked = settings.subscriptionRefreshOverWifiOnly,
                 onCheckedChange = viewModel::setSubscriptionWifiOnly,
             )
             RowDivider()
             SettingRow(
-                title = "Merge duplicate nodes",
-                subtitle = "Replace a node in place instead of adding it twice",
+                title = stringResource(R.string.settings_merge_duplicates),
+                subtitle = stringResource(R.string.settings_merge_duplicates_desc),
                 checked = settings.mergeDuplicateNodes,
                 onCheckedChange = viewModel::setMergeDuplicateNodes,
             )
@@ -173,14 +173,14 @@ fun SettingsScreen(
         SettingsCard {
             SettingRow(
                 title = stringResource(R.string.settings_update_on_launch),
-                subtitle = "Checks quietly in the background",
+                subtitle = stringResource(R.string.settings_update_on_launch_desc),
                 checked = settings.checkForUpdatesOnLaunch,
                 onCheckedChange = viewModel::setCheckForUpdatesOnLaunch,
             )
             RowDivider()
             SettingRow(
                 title = stringResource(R.string.settings_update_prerelease),
-                subtitle = "Offer pre-releases as well as stable versions",
+                subtitle = stringResource(R.string.settings_update_prerelease_desc),
                 checked = settings.allowPrereleaseUpdates,
                 onCheckedChange = viewModel::setAllowPrereleaseUpdates,
             )
@@ -232,14 +232,14 @@ fun SettingsScreen(
         SettingsCard {
             SettingRow(
                 title = stringResource(R.string.settings_dark_theme),
-                subtitle = "DARK VVPN is dark-first by design",
+                subtitle = stringResource(R.string.settings_dark_theme_desc),
                 checked = settings.forceDarkTheme,
                 onCheckedChange = viewModel::setForceDarkTheme,
             )
             RowDivider()
             SettingRow(
                 title = stringResource(R.string.settings_dynamic_color),
-                subtitle = "Follow the system wallpaper (Android 12+)",
+                subtitle = stringResource(R.string.settings_dynamic_color_desc),
                 checked = settings.dynamicColor,
                 onCheckedChange = viewModel::setDynamicColor,
             )
