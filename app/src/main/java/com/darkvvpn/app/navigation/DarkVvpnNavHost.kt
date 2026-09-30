@@ -42,6 +42,7 @@ fun DarkVvpnNavHost(
         composable(Routes.HOME) {
             HomeScreen(
                 onNavigateToServers = { navController.navigate(Routes.SERVERS) },
+                onNavigateToSubscriptions = { navController.navigate(Routes.SUBSCRIPTIONS) },
                 updateViewModel = updateViewModel,
             )
         }

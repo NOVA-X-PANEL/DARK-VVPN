@@ -106,6 +106,17 @@
     <string name="home_session">Session</string>
     <string name="home_session_duration">Session duration: %1$s</string>
     <string name="home_no_server">No server selected</string>
+    <string name="home_routing_mode">Routing Mode</string>
+    <string name="home_routing_rule">Rule</string>
+    <string name="home_routing_global">Global</string>
+    <string name="home_routing_direct">Direct</string>
+    <string name="home_subscription_quota">Subscription</string>
+    <string name="home_see_all_servers">See all %1$d servers</string>
+    <string name="home_test_ping">Test Ping ⚡</string>
+    <string name="home_add_subscription">Add Subscription</string>
+    <string name="home_no_subscription">No active subscription</string>
+    <string name="home_days_remaining">%1$d days remaining</string>
+    <string name="home_nodes_count">%1$d online nodes</string>
 
     <!-- Servers -->
     <string name="servers_title">Servers</string>

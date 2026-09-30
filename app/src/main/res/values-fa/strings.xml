@@ -106,6 +106,17 @@
     <string name="home_session">اطلاعات اتصال</string>
     <string name="home_session_duration">مدت نشست: %1$s</string>
     <string name="home_no_server">هیچ سروری انتخاب نشده</string>
+    <string name="home_routing_mode">حالت مسیریابی (Routing)</string>
+    <string name="home_routing_rule">قانونمند (Rule)</string>
+    <string name="home_routing_global">سراسری (Global)</string>
+    <string name="home_routing_direct">مستقیم (Direct)</string>
+    <string name="home_subscription_quota">وضعیت اشتراک</string>
+    <string name="home_see_all_servers">مشاهده همه %1$d سرور</string>
+    <string name="home_test_ping">تست پینگ ⚡</string>
+    <string name="home_add_subscription">افزودن اشتراک</string>
+    <string name="home_no_subscription">هنوز اشتراکی افزوده نشده</string>
+    <string name="home_days_remaining">%1$d روز مانده</string>
+    <string name="home_nodes_count">%1$d سرور آنلاین</string>
 
     <!-- Servers -->
     <string name="servers_title">سرورها</string>
