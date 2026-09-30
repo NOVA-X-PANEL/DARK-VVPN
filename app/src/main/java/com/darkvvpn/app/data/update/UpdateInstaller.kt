@@ -48,19 +48,27 @@ class UpdateInstaller(private val context: Context) {
      */
     fun openInstallPermissionSettings() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-            .setData(Uri.parse("package:${context.packageName}"))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }
-            .onFailure { Log.w(TAG, "Install-permission settings screen is unavailable") }
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                .setData(Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val generic = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(generic)
+            } catch (e2: Exception) {
+                Log.w(TAG, "Install-permission settings screen is unavailable", e2)
+            }
+        }
     }
 
     /**
      * Launches the package installer for [apk].
      *
-     * @return `true` when the installer was launched, `false` when permission is
-     *   missing or no installer is present — the caller should then call
-     *   [openInstallPermissionSettings].
+     * @return `true` when the installer was launched, `false` when file is missing
+     *   or no installer is present.
      */
     fun install(apk: File): Boolean {
         if (!apk.exists() || apk.length() == 0L) {
@@ -68,8 +76,7 @@ class UpdateInstaller(private val context: Context) {
             return false
         }
         if (!canInstallPackages()) {
-            Log.i(TAG, "install() blocked: the user has not granted install permission")
-            return false
+            openInstallPermissionSettings()
         }
 
         val uri = try {
@@ -83,7 +90,16 @@ class UpdateInstaller(private val context: Context) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, APK_MIME_TYPE)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        // Grant URI permission explicitly to all activities that can handle package installation
+        val handlers = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        for (handler in handlers) {
+            val pkg = handler.activityInfo.packageName
+            context.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         return try {

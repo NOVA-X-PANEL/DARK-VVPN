@@ -375,9 +375,10 @@ private fun ConfirmAction(
                 }
 
                 state.readyToInstall != null -> Button(onClick = {
-                    // Ask for the grant first when it is missing, rather than
-                    // launching an installer that the system will refuse.
-                    if (state.needsInstallPermission) onOpenPermissionSettings else onInstall()
+                    if (state.needsInstallPermission) {
+                        onOpenPermissionSettings()
+                    }
+                    onInstall()
                 }) {
                     Text(stringResource(R.string.update_install_now))
                 }

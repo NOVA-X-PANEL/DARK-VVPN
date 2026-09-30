@@ -123,8 +123,14 @@ fun HomeScreen(
                     state = updateState,
                     onClick = {
                         val current = updateState
-                        if (current is UpdateUiState.Available && current.readyToInstall != null) {
-                            updateViewModel?.install()
+                        if (current is UpdateUiState.Available) {
+                            if (current.readyToInstall != null) {
+                                updateViewModel?.install()
+                            } else if (!current.isDownloading) {
+                                updateViewModel?.download()
+                            } else {
+                                updateViewModel?.openSheet()
+                            }
                         } else {
                             updateViewModel?.openSheet()
                         }

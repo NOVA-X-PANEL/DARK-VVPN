@@ -366,7 +366,6 @@ class UpdateViewModel(
         if (!installer.canInstallPackages()) {
             installer.openInstallPermissionSettings()
             _state.value = available.copy(needsInstallPermission = true)
-            return false
         }
         return installer.install(file)
     }
