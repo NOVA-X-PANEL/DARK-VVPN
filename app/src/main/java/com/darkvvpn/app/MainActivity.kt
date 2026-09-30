@@ -12,6 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -70,18 +73,22 @@ class MainActivity : ComponentActivity() {
             }
             val layoutDirection = if (locale.language == "fa") LayoutDirection.Rtl else LayoutDirection.Ltr
 
-            val context = LocalContext.current
-            val customContext = remember(locale, context) {
-                val config = android.content.res.Configuration(context.resources.configuration).apply {
+            val activity = this@MainActivity
+            val config = remember(locale) {
+                Locale.setDefault(locale)
+                val c = android.content.res.Configuration(activity.resources.configuration).apply {
                     setLocale(locale)
                     setLayoutDirection(locale)
                 }
-                context.createConfigurationContext(config)
+                @Suppress("DEPRECATION")
+                activity.resources.updateConfiguration(c, activity.resources.displayMetrics)
+                c
             }
 
             CompositionLocalProvider(
-                LocalContext provides customContext,
+                LocalConfiguration provides config,
                 LocalLayoutDirection provides layoutDirection,
+                LocalActivityResultRegistryOwner provides this@MainActivity,
             ) {
                 DarkVvpnTheme(
                     darkTheme = settings.forceDarkTheme,

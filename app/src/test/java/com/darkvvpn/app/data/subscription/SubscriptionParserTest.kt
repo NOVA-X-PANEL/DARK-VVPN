@@ -180,14 +180,14 @@ class SubscriptionParserTest {
     // ---- Hysteria2 -----------------------------------------------------
 
     @Test
-    fun `parses hysteria2 and records that it is not an xray outbound`() {
+    fun `parses hysteria2 and records that it is an xray outbound`() {
         val node = parser.parseLink("hysteria2://hy2pass@ca.example.com:443?sni=ca.example.com&insecure=1#Toronto")
 
         requireNotNull(node)
         assertEquals(VpnProtocol.HYSTERIA2, node.protocol)
         assertEquals("hy2pass", node.password)
         assertTrue(node.allowInsecure)
-        assertTrue("Hysteria2 needs a sing-box class core", !node.protocol.isXrayNative)
+        assertTrue("Hysteria2 is supported by the built-in xray core", node.protocol.isXrayNative)
     }
 
     @Test
