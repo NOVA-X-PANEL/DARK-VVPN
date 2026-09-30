@@ -3,6 +3,7 @@ package com.darkvvpn.app.ui.screens
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,9 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Timer
@@ -30,6 +34,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,35 +112,52 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
-            Text(
-                text = stringResource(R.string.home_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            // Top Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Text(
+                        text = stringResource(R.string.home_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
 
-            if (updateBadge != null || updateState is UpdateUiState.Available) {
-                Spacer(Modifier.height(10.dp))
-                YellowUpdateBadge(
-                    badge = updateBadge,
-                    state = updateState,
-                    onClick = {
-                        val current = updateState
-                        if (current is UpdateUiState.Available) {
-                            if (current.readyToInstall != null) {
-                                updateViewModel?.install()
-                            } else if (!current.isDownloading) {
-                                updateViewModel?.download()
+                if (updateBadge != null || updateState is UpdateUiState.Available) {
+                    YellowUpdateBadge(
+                        badge = updateBadge,
+                        state = updateState,
+                        onClick = {
+                            val current = updateState
+                            if (current is UpdateUiState.Available) {
+                                if (current.readyToInstall != null) {
+                                    updateViewModel?.install()
+                                } else if (!current.isDownloading) {
+                                    updateViewModel?.download()
+                                } else {
+                                    updateViewModel?.openSheet()
+                                }
                             } else {
                                 updateViewModel?.openSheet()
                             }
-                        } else {
-                            updateViewModel?.openSheet()
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
 
             failure?.let { message ->
@@ -146,39 +168,56 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(24.dp))
 
-            Text(
-                text = selectedServer?.displayLocation ?: stringResource(R.string.home_no_server),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(28.dp))
-
+            // Main Power Button (Clean Neon)
             ConnectionOrb(
                 state = state,
-                statusLabel = statusLabel(state),
                 enabled = !state.isBusy,
                 onClick = {
                     if (state.isConnected) viewModel.disconnect(context) else viewModel.connect(context)
                 },
             )
 
-            Spacer(Modifier.height(6.dp))
-
-            Text(
-                text = if (state.isConnected) stringResource(R.string.home_disconnect) else stringResource(R.string.home_connect),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            // Status Caption below Power Button
+            if (state.isConnected) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(top = 14.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.home_status_connected),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.home_session_duration, Formatters.duration(stats.sessionSeconds)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            } else {
+                Text(
+                    text = statusLabel(state),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
 
             Spacer(Modifier.height(28.dp))
 
-            SectionHeader(title = stringResource(R.string.home_selected_server))
-
-            Spacer(Modifier.height(10.dp))
-
+            // Selected Server Card
             SelectedServerCard(
                 name = selectedServer?.name ?: stringResource(R.string.home_no_server),
                 location = selectedServer?.displayLocation ?: stringResource(R.string.home_change_server),
@@ -187,38 +226,28 @@ fun HomeScreen(
                 onClick = onNavigateToServers,
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
 
-            SectionHeader(title = stringResource(R.string.home_session))
-
-            Spacer(Modifier.height(10.dp))
-
+            // Live Speed Pills (Download & Upload)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 StatTile(
-                    icon = Icons.Filled.Download,
+                    icon = Icons.Filled.ArrowDownward,
                     label = stringResource(R.string.home_download),
                     value = Formatters.speed(stats.downloadBytesPerSec),
+                    iconTint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
-                    icon = Icons.Filled.Upload,
+                    icon = Icons.Filled.ArrowUpward,
                     label = stringResource(R.string.home_upload),
                     value = Formatters.speed(stats.uploadBytesPerSec),
+                    iconTint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.weight(1f),
                 )
             }
-
-            Spacer(Modifier.height(10.dp))
-
-            StatTile(
-                icon = Icons.Filled.Timer,
-                label = stringResource(R.string.home_duration),
-                value = Formatters.duration(stats.sessionSeconds),
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             Spacer(Modifier.height(28.dp))
         }
@@ -240,12 +269,13 @@ private fun SelectedServerCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CountryAvatar(countryCode = countryCode)
@@ -254,6 +284,7 @@ private fun SelectedServerCard(
                 Text(
                     text = name,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -271,16 +302,24 @@ private fun SelectedServerCard(
                 ping < 0 -> stringResource(R.string.servers_ping_timeout)
                 else -> "$ping ms"
             }
-            Text(
-                text = pingText,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(6.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Text(
+                    text = pingText,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (ping != null && ping > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             Box(
                 modifier = Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {

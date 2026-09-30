@@ -11,14 +11,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,50 +33,46 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.darkvvpn.app.R
 import com.darkvvpn.app.data.model.VpnState
+import com.darkvvpn.app.ui.theme.BrandCyan
 import com.darkvvpn.app.ui.theme.BrandRed
-import com.darkvvpn.app.ui.theme.BrandTeal
-import com.darkvvpn.app.ui.theme.BrandViolet
-import com.darkvvpn.app.ui.theme.BrandVioletLight
-import com.darkvvpn.app.ui.theme.Ink500
+import com.darkvvpn.app.ui.theme.Ink600
 import com.darkvvpn.app.ui.theme.Ink700
+import com.darkvvpn.app.ui.theme.Ink750
+import com.darkvvpn.app.ui.theme.Ink850
 
 /**
- * The screen's centrepiece: one large, state-aware button that starts and stops
- * the tunnel.
- *
- * Visual language:
- *  - grey ring + power icon  → disconnected
- *  - pulsing violet arc      → connecting / disconnecting
- *  - green ring + shield     → connected
- *  - red ring                → error
+ * The clean neon power button center-piece: one elegant, state-aware button
+ * that starts and stops the tunnel.
  */
 @Composable
 fun ConnectionOrb(
     state: VpnState,
-    statusLabel: String,
+    statusLabel: String = "",
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    diameter: androidx.compose.ui.unit.Dp = 248.dp,
+    diameter: androidx.compose.ui.unit.Dp = 180.dp,
     enabled: Boolean = true,
 ) {
     val accent by animateColorAsState(
         targetValue = when {
-            state.isConnected -> BrandTeal
+            state.isConnected -> BrandCyan
             state is VpnState.Error -> BrandRed
-            state.isBusy -> BrandVioletLight
-            else -> Ink500
+            state.isBusy -> BrandCyan
+            else -> Ink600
         },
         label = "orbAccent",
     )
 
     val infinite = rememberInfiniteTransition(label = "orbPulse")
     val pulse by infinite.animateFloat(
-        initialValue = 0.86f,
-        targetValue = 1.06f,
+        initialValue = 0.94f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1400),
             repeatMode = RepeatMode.Reverse,
@@ -90,12 +86,6 @@ fun ConnectionOrb(
         label = "orbSweep",
     )
 
-    val icon: ImageVector = when {
-        state.isConnected -> Icons.Filled.Shield
-        state.isBusy -> Icons.Filled.Lock
-        else -> Icons.Filled.PowerSettingsNew
-    }
-
     Box(
         modifier = modifier
             .size(diameter)
@@ -107,14 +97,11 @@ fun ConnectionOrb(
             val radius = size.minDimension / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
 
-            // Ring thickness in density-independent units. DrawScope works in
-            // pixels, so a raw constant here would render visually thinner on
-            // low-density screens and heavier on high-density ones.
-            val ringWidth = 5.dp.toPx()
-            val ringRadius = radius * 0.74f
+            val ringWidth = 3.dp.toPx()
+            val ringRadius = radius * 0.76f
 
-            // Soft outer glow, brighter while the tunnel is up.
-            val glowAlpha = if (state.isConnected) 0.34f else 0.16f
+            // Soft outer radial glow when active
+            val glowAlpha = if (state.isConnected) 0.22f else 0.06f
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(accent.copy(alpha = glowAlpha), Color.Transparent),
@@ -125,7 +112,18 @@ fun ConnectionOrb(
                 center = center,
             )
 
-            // Track ring.
+            // Inner dark circular fill
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Ink750, Ink850),
+                    center = center,
+                    radius = ringRadius,
+                ),
+                radius = ringRadius,
+                center = center,
+            )
+
+            // Track ring
             drawCircle(
                 color = Ink700,
                 radius = ringRadius,
@@ -133,7 +131,7 @@ fun ConnectionOrb(
                 style = Stroke(width = ringWidth),
             )
 
-            // Accent ring — pulses while busy and settles when idle.
+            // Accent ring
             val pulseRadius = ringRadius * if (state.isBusy) pulse else 1f
             drawCircle(
                 color = accent,
@@ -142,16 +140,16 @@ fun ConnectionOrb(
                 style = Stroke(width = ringWidth),
             )
 
-            // Indeterminate sweep while connecting/disconnecting.
+            // Indeterminate sweep while connecting/disconnecting
             if (state.isBusy) {
                 drawArc(
-                    color = BrandViolet,
+                    color = BrandCyan,
                     startAngle = sweep,
                     sweepAngle = 70f,
                     useCenter = false,
                     topLeft = Offset(center.x - ringRadius, center.y - ringRadius),
                     size = Size(ringRadius * 2f, ringRadius * 2f),
-                    style = Stroke(width = ringWidth, cap = StrokeCap.Round),
+                    style = Stroke(width = ringWidth * 1.2f, cap = StrokeCap.Round),
                 )
             }
         }
@@ -161,17 +159,23 @@ fun ConnectionOrb(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = Icons.Filled.PowerSettingsNew,
                 contentDescription = null,
-                tint = if (state.isConnected) BrandTeal else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(64.dp),
+                tint = if (state.isConnected) BrandCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(46.dp),
             )
+            Spacer(Modifier.height(6.dp))
+            val actionText = when {
+                state.isConnected -> stringResource(R.string.home_disconnect)
+                state.isBusy -> stringResource(R.string.home_status_connecting)
+                else -> stringResource(R.string.home_connect)
+            }
             Text(
-                text = statusLabel,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = actionText,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (state.isConnected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 12.dp),
             )
         }
     }

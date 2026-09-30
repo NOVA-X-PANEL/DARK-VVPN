@@ -104,6 +104,7 @@
     <string name="home_upload">آپلود</string>
     <string name="home_duration">مدت زمان</string>
     <string name="home_session">اطلاعات اتصال</string>
+    <string name="home_session_duration">مدت نشست: %1$s</string>
     <string name="home_no_server">هیچ سروری انتخاب نشده</string>
 
     <!-- Servers -->

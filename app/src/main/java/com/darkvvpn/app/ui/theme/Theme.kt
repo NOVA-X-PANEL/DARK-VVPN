@@ -11,17 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColors = darkColorScheme(
-    primary = BrandViolet,
-    onPrimary = PureWhite,
-    primaryContainer = Violet40,
-    onPrimaryContainer = Violet90,
+    primary = BrandCyan,
+    onPrimary = Ink900,
+    primaryContainer = BrandCyanContainer,
+    onPrimaryContainer = BrandCyanLight,
 
-    secondary = BrandTeal,
+    secondary = BrandAmber,
     onSecondary = Ink900,
-    secondaryContainer = BrandTealDark,
+    secondaryContainer = BrandAmberDeep,
     onSecondaryContainer = PureWhite,
 
-    tertiary = BrandVioletLight,
+    tertiary = BrandCyanLight,
     onTertiary = Ink900,
 
     background = Ink850,

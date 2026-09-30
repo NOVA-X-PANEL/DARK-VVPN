@@ -104,6 +104,7 @@
     <string name="home_upload">Upload</string>
     <string name="home_duration">Duration</string>
     <string name="home_session">Session</string>
+    <string name="home_session_duration">Session duration: %1$s</string>
     <string name="home_no_server">No server selected</string>
 
     <!-- Servers -->

@@ -108,9 +108,9 @@ fun ProtocolChip(
 }
 
 private fun PingQuality.color(): Color = when (this) {
-    PingQuality.EXCELLENT -> Color(0xFF3DDCB4)
-    PingQuality.GOOD -> Color(0xFF7CDA6A)
-    PingQuality.FAIR -> Color(0xFFFFC24B)
+    PingQuality.EXCELLENT -> Color(0xFF00F5D4)
+    PingQuality.GOOD -> Color(0xFF2DD4BF)
+    PingQuality.FAIR -> Color(0xFFFFB800)
     PingQuality.POOR -> Color(0xFFFF5A6E)
-    PingQuality.UNKNOWN -> Color(0xFF8A8AA3)
+    PingQuality.UNKNOWN -> Color(0xFF64748B)
 }
