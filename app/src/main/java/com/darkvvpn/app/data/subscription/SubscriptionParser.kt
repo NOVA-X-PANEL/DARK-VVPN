@@ -119,15 +119,16 @@ class SubscriptionParser(
         val afterScheme = head.substringAfter("://")
         if (afterScheme.isEmpty()) return null
 
-        // `userinfo@host:port` — userinfo may hold a uuid, password, or user:pass.
-        val at = afterScheme.lastIndexOf('@')
-        val userInfo = if (at >= 0) afterScheme.substring(0, at) else ""
-        val hostPart = if (at >= 0) afterScheme.substring(at + 1) else afterScheme
-
-        val (rawHostPort, rawQuery) = hostPart.split('?', limit = 2).let {
+        val (authority, rawQuery) = afterScheme.split('?', limit = 2).let {
             it[0] to it.getOrNull(1)
         }
-        val hostPort = rawHostPort.trim().trimEnd('/')
+
+        // `userinfo@host:port` — userinfo may hold a uuid, password, or user:pass.
+        val at = authority.lastIndexOf('@')
+        val userInfo = if (at >= 0) authority.substring(0, at) else ""
+        val hostPart = if (at >= 0) authority.substring(at + 1) else authority
+
+        val hostPort = hostPart.trim().trimEnd('/')
         val host = parseHost(hostPort) ?: return null
         val port = parsePort(hostPort) ?: protocol.defaultPort
         val params = LinkText.queryParams(rawQuery)
@@ -281,21 +282,24 @@ class SubscriptionParser(
     // ==================================================================
     private fun parseShadowsocks(link: String): VpnServer? {
         val (head, remark) = LinkText.splitFragment(link)
-        var body = head.substringAfter("://")
+        val body = head.substringAfter("://")
         if (body.isEmpty()) return null
 
+        val (authority, rawQuery) = body.split('?', limit = 2).let { it[0] to it.getOrNull(1) }
+
         // Legacy: the whole `method:password@host:port` is base64 with no `@`.
-        if (!body.contains('@')) {
-            val decoded = LinkText.decodeBase64(body) ?: return null
-            body = decoded
+        val authString = if (!authority.contains('@')) {
+            LinkText.decodeBase64(authority) ?: return null
+        } else {
+            authority
         }
 
-        val at = body.lastIndexOf('@')
+        val at = authString.lastIndexOf('@')
         if (at < 0) return null
-        val credPart = body.substring(0, at)
-        val hostPart = body.substring(at + 1)
+        val credPart = authString.substring(0, at)
+        val hostPart = authString.substring(at + 1)
 
-        val (hostPort, rawQuery) = hostPart.split('?', limit = 2).let { it[0] to it.getOrNull(1) }
+        val hostPort = hostPart.trim().trimEnd('/')
         val host = parseHost(hostPort) ?: return null
         val port = parsePort(hostPort) ?: VpnProtocol.SHADOWSOCKS.defaultPort
 
