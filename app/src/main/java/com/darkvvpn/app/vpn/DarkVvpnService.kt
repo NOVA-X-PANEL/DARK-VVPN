@@ -296,6 +296,15 @@ class DarkVvpnService : VpnService() {
                     ),
                 )
             }
+
+            // If the core stopped unexpectedly while the tunnel was still active,
+            // immediately tear down the interface to avoid a zombie state.
+            if (isActive && tunInterface != null && !XrayCore.isRunning) {
+                Log.e(TAG, "tunnel core stopped unexpectedly while active; tearing down tunnel")
+                shutdownTunnel()
+                VpnConnectionManager.onError("The tunnel core stopped unexpectedly.")
+                stopSelf()
+            }
         }
     }
 

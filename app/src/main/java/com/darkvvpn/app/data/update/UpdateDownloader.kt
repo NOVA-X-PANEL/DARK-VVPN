@@ -84,6 +84,9 @@ class UpdateDownloader(
 
     private var job: Job? = null
 
+    private val updatesDir: File
+        get() = File(cacheDir, "updates").apply { mkdirs() }
+
     /** Cancels an in-flight download and clears the partial file. */
     fun cancel() {
         job?.cancel()
@@ -104,8 +107,8 @@ class UpdateDownloader(
             ?: return DownloadResult.Failure("This release has no APK to download.")
 
         val expected = release.apkSha256
-        val target = File(cacheDir, "update-${release.tag}.apk")
-        val partial = File(cacheDir, "$UPDATE_FILE_PREFIX${release.tag}.apk.part")
+        val target = File(updatesDir, "update-${release.tag}.apk")
+        val partial = File(updatesDir, "$UPDATE_FILE_PREFIX${release.tag}.apk.part")
 
         // 1. If target already exists and is valid, skip download entirely
         if (target.exists() && target.length() > 0L) {
@@ -315,6 +318,8 @@ class UpdateDownloader(
 
     private fun cleanupPartials() {
         runCatching {
+            updatesDir.listFiles { f -> f.name.startsWith(UPDATE_FILE_PREFIX) || f.name.endsWith(".part") }
+                ?.forEach { it.delete() }
             cacheDir.listFiles { f -> f.name.startsWith(UPDATE_FILE_PREFIX) }
                 ?.forEach { it.delete() }
         }

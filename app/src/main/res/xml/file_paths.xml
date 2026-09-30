@@ -2,18 +2,14 @@
 <!--
     FileProvider share roots.
 
-    The APK downloaded for an in-app update lives in the app's private cache
-    directory, which is the only root exposed here. Nothing else in the app's
-    storage is shared, so a bug elsewhere cannot turn this provider into a way
-    to read the data directory.
+    The APK downloaded for an in-app update lives strictly in the app's private
+    updates directory (cacheDir/updates). Nothing else in the app's storage is
+    shared, so a bug elsewhere cannot turn this provider into a way to read
+    other cache contents or data directories.
 -->
 <paths>
-    <!-- cacheDir/update-<tag>.apk -->
+    <!-- cacheDir/updates/update-<tag>.apk -->
     <cache-path
         name="update_apks"
-        path="." />
-
-    <external-cache-path
-        name="external_update_apks"
-        path="." />
+        path="updates" />
 </paths>
