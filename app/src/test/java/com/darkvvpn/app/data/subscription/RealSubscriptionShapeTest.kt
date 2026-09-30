@@ -162,7 +162,7 @@ class RealSubscriptionShapeTest {
         val result = com.darkvvpn.app.xray.XrayConfigBuilder.build(hy)
 
         assertTrue(result is com.darkvvpn.app.xray.XrayConfigResult.Success)
-        val json = (result as com.darkvvpn.app.xray.XrayConfigResult.Success).configJson
+        val json = (result as com.darkvvpn.app.xray.XrayConfigResult.Success).rendered
         assertTrue(json.contains("hysteria"))
     }
 

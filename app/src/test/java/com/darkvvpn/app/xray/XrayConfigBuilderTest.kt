@@ -346,7 +346,7 @@ class XrayConfigBuilderTest {
         val result = XrayConfigBuilder.build(hy2)
         assertTrue(result is XrayConfigResult.Success)
         assertTrue(result.isSuccess)
-        val json = (result as XrayConfigResult.Success).configJson
+        val json = (result as XrayConfigResult.Success).rendered
         assertTrue(json.contains("hysteria"))
         assertTrue(json.contains(""""auth": "pw"""") || json.contains(""""auth":"pw""""))
     }

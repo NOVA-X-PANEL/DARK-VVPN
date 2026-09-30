@@ -154,7 +154,7 @@ class ServerRepository {
         if (configResult is XrayConfigResult.Success) {
             try {
                 val delay = Libv2ray.measureOutboundDelay(
-                    configResult.configJson,
+                    configResult.rendered,
                     "https://cp.cloudflare.com/generate_204",
                 )
                 if (delay > 0) return@withContext delay.toInt()

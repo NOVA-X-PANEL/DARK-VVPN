@@ -570,7 +570,7 @@ object XrayConfigBuilder {
                 },
             )
 
-            VpnTransport.TCP, VpnTransport.RAW -> null
+            VpnTransport.TCP, VpnTransport.RAW, VpnTransport.HYSTERIA -> null
         }
     }
 
