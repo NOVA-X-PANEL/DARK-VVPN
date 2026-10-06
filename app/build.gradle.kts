@@ -25,8 +25,8 @@ plugins {
  * core is a full device compromise — the one dependency in this project where
  * "download whatever the URL serves" is not acceptable.
  * --------------------------------------------------------------------------- */
-val xrayCoreVersion = "26.9.9"
-val xrayCoreSha256 = "9ecf4c921568d8f4cb8550d3bafe08ff6f1d1984f45a6ad183dcdf52ee9302de"
+val xrayCoreVersion = "26.7.5"
+val xrayCoreSha256 = "24d40bfd529430c273e52cdeb9dec1c6f5c7e76db632a908052248ce2c2ec325"
 val xrayCoreUrl =
     "https://github.com/2dust/AndroidLibXrayLite/releases/download/v$xrayCoreVersion/libv2ray.aar"
 
@@ -113,8 +113,8 @@ android {
         applicationId = "com.darkvvpn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.8.7"
+        versionCode = 30
+        versionName = "1.8.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
